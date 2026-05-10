@@ -1,0 +1,91 @@
+day_count: "ACT/360"
+vol_window_days: 252
+currency_pairs: ["EUR_TND", "USD_TND"]
+hedge_intensity_scenarios:
+  no_hedge: 0.00
+  low_protection: 0.25
+  baseline_protection: 0.50
+  high_protection: 0.75
+  full_hedge: 1.00
+cip_wedge_bps: 50
+forward_bias_modes: ["unbiased", "empirical"]
+vol_method: "rolling"
+brown_toft_constant: 0.0
+market_data_source: "excel_workbook"
+market_workbook_path: "data/inputs/Forwards calculations.xlsx"
+forward_stress_scenarios:
+  cip_base: 0
+  cip_plus_50bps: 50
+cohort_profile_sample_size: 1000
+cohort_sample_seed: 42
+require_true_oos_backtest: true
+walk_forward_initial_train_start: "2008-01-01"
+walk_forward_initial_train_end: "2013-12-31"
+cip_recalc_tolerance: 1.0e-3
+regime_breaks:
+  pre_revolution_and_managed_crawl:
+    start: "2007-09-12"
+    end: "2013-12-31"
+  post_revolution_depreciation:
+    start: "2014-01-01"
+    end: "2018-12-31"
+  flexible_managed_regime:
+    start: "2019-01-01"
+    end: "2026-12-31"
+fallback_market_csv_path: "data/inputs/market_data.csv"
+fallback_spot_history_csv_path: "data/inputs/spot_history.csv"
+market_data_template_path: "data/inputs/market_data_template.csv"
+spot_history_template_path: "data/inputs/spot_history_template.csv"
+allow_bid_ask_synthesis: false
+synthetic_fx_spread_bps: 20
+synthetic_rate_spread_bps: 10
+require_backtest: false
+require_realized_future_spot: false
+stage2_min_abs_exposure: 1.0e-6
+stage2_min_relative_exposure: 0.001
+backtest_split:
+  mode: "walk_forward"
+  walk_forward_initial_train_start: "2008-01-01"
+  walk_forward_initial_train_end: "2013-12-31"
+  walk_forward_test_frequency: "yearly"
+  expanding_window: true
+  require_walk_forward_backtest: false
+regime_backtest:
+  enabled: true
+  regimes:
+    pre_adjustment_2008_2013:
+      label: "Global crisis aftermath / early instability"
+      regime_start: "2008-01-01"
+      regime_end: "2013-12-31"
+      train_start: "2008-01-01"
+      train_end: "2011-12-31"
+      test_start: "2012-01-01"
+      test_end: "2013-12-31"
+    depreciation_2014_2018:
+      label: "TND depreciation and external-pressure period"
+      regime_start: "2014-01-01"
+      regime_end: "2018-12-31"
+      train_start: "2014-01-01"
+      train_end: "2016-12-31"
+      test_start: "2017-01-01"
+      test_end: "2018-12-31"
+    covid_2019_2021:
+      label: "COVID and liquidity shock period"
+      regime_start: "2019-01-01"
+      regime_end: "2021-12-31"
+      train_start: "2019-01-01"
+      train_end: "2019-12-31"
+      test_start: "2020-01-01"
+      test_end: "2021-12-31"
+    inflation_rate_shock_2022_2025:
+      label: "Post-COVID inflation, rates, commodity and geopolitical shock period"
+      regime_start: "2022-01-01"
+      regime_end: "2025-12-31"
+      train_start: "2022-01-01"
+      train_end: "2023-12-31"
+      test_start: "2024-01-01"
+      test_end: "2025-12-31"
+sub_periods:
+  pre_2014: {start: "2008-01-01", end: "2013-12-31"}
+  depreciation_2014_2018: {start: "2014-01-01", end: "2018-12-31"}
+  recent_2019_2025: {start: "2019-01-01", end: "2025-12-31"}

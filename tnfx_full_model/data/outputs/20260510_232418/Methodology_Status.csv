@@ -1,0 +1,13 @@
+run_id,item,status,severity,explanation
+20260510_232418,Stage 1 profile engine,implemented,info,
+20260510_232418,Stage 1.5 currency-tenor handoff,implemented,info,
+20260510_232418,Global Stage 2 hedge-decision engine,implemented,info,
+20260510_232418,Historical realized backtest,not_implemented,info,"Rolling market-side backtest computed on ~116k historical forward observations from Forwards_calculations.xlsx spanning 2007-2026, across five hedge intensity scenarios and two CIP stress scenarios. See Rolling_Market_Performance.csv."
+20260510_232418,True train/test out-of-sample backtest,not_implemented,warning,Current split tables are diagnostic unless split_specific_gamma_used=true.
+20260510_232418,CIP+50bps stress scenario,implemented,info,CIP+50bps consumed by optimizer as a parallel forward_stress_scenario. Compare with cip_base in Rolling_Market_Performance.csv via groupby forward_stress_scenario.
+20260510_232418,Per-profile time-series P&L,not_produced_by_design,info,Synthetic profiles are static Sobol draws and have no temporal identity. Per-profile drilldown is on-demand only via the Streamlit interface (Session 2).
+20260510_232418,Macro-anchor,nominal_pass_only_prior_sensitive,warning,Primary calibration uses nominal prior. Firm-count and trade-flow priors are sensitivity views.
+20260510_232418,GARCH volatility,future_placeholder,info,
+20260510_232418,CVaR objective,future_placeholder,info,
+20260510_232418,Options,future_stage_2_5,info,
+20260510_232418,Stage 3 CIP basis,future_work,info,

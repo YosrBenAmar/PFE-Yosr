@@ -1,0 +1,169 @@
+families:
+  importer:
+    label: "Pure Importer"
+    h_R: [0.00, 0.15]
+    h_C: [0.35, 0.90]
+    r: [0.03, 0.20]
+    beta: [0.75, 0.90]
+    fx_debt_service_share: [0.00, 0.06]
+    c: [1.00, 6.00]
+    lambda: [0.25, 0.55]
+    sigma_Q: [0.08, 0.45]
+    rho: [-0.30, 0.30]
+    f: [0.10, 0.70]
+    sign_rule: "delta_CF_total <= -epsilon_I"
+    import_leg: true
+  exporter:
+    label: "Pure Exporter"
+    h_R: [0.35, 0.95]
+    h_C: [0.00, 0.35]
+    r: [0.05, 0.30]
+    beta: [0.00, 0.25]
+    fx_debt_service_share: [0.00, 0.04]
+    c: [1.00, 6.00]
+    lambda: [0.25, 0.60]
+    sigma_Q: [0.08, 0.55]
+    rho: [-0.20, 0.60]
+    f: [0.10, 0.60]
+    sign_rule: "delta_CF_total >= epsilon_E"
+    import_leg: false
+  processor:
+    label: "Two-Sided Long-Cycle Processor"
+    h_R: [0.40, 1.00]
+    h_C: [0.25, 0.80]
+    r: [0.04, 0.18]
+    beta: [0.10, 0.55]
+    fx_debt_service_share: [0.00, 0.07]
+    c: [2.00, 9.00]
+    lambda: [0.50, 0.85]
+    sigma_Q: [0.08, 0.35]
+    rho: [-0.20, 0.40]
+    f: [0.20, 0.70]
+    sign_rule: "abs(delta_CF_total) <= tau_P"
+    import_leg: true
+  trader:
+    label: "Two-Sided Short-Cycle Trader"
+    h_R: [0.20, 0.95]
+    h_C: [0.20, 0.95]
+    r: [0.03, 0.08]
+    beta: [0.05, 0.40]
+    fx_debt_service_share: [0.00, 0.04]
+    c: [0.25, 2.00]
+    lambda: [0.45, 0.80]
+    sigma_Q: [0.05, 0.30]
+    rho: [-0.20, 0.20]
+    f: [0.70, 1.00]
+    sign_rule: "abs(delta_CF_total) <= tau_T"
+    import_leg: true
+
+sign_thresholds:
+  epsilon_I: 0.05
+  epsilon_E: 0.05
+  tau_P: 0.20
+  tau_T: 0.25
+sign_threshold_sensitivity:
+  epsilon_I: [0.03, 0.05, 0.075, 0.10]
+  epsilon_E: [0.03, 0.05, 0.075, 0.10]
+  tau_P: [0.15, 0.20, 0.25]
+  tau_T: [0.20, 0.25, 0.30]
+family_priors:
+  nominal: {importer: 0.35, exporter: 0.20, processor: 0.30, trader: 0.15}
+  firm_count: {importer: 0.45, exporter: 0.15, processor: 0.25, trader: 0.15}
+  trade_flow: {importer: 0.30, exporter: 0.20, processor: 0.40, trader: 0.10}
+tenors_months: [1, 2, 3, 6, 9, 12]
+timing_cv_scenarios: {low: 0.25, baseline: 0.40, high: 0.60}
+active_currency_threshold: 0.005
+macro_anchor: {lower: -0.10, upper: -0.03}
+alpha_bounds:
+  importer:
+    alpha_R_EUR: [0.20, 0.80]
+    alpha_C_EUR: [0.30, 0.80]
+    alpha_D_EUR: [0.20, 0.80]
+  exporter:
+    alpha_R_EUR_conditional:
+      - {condition: "h_R >= 0.85", bounds: [0.65, 0.95]}
+      - {condition: "0.50 <= h_R < 0.85", bounds: [0.50, 0.90]}
+      - {condition: "h_R < 0.50", bounds: [0.30, 0.85]}
+    alpha_C_EUR: [0.30, 0.85]
+    alpha_D_EUR: [0.30, 0.85]
+  processor:
+    alpha_R_EUR_conditional:
+      - {condition: "h_R >= 0.80", bounds: [0.55, 0.95]}
+      - {condition: "0.40 <= h_R < 0.80", bounds: [0.40, 0.85]}
+      - {condition: "h_R < 0.40", bounds: [0.30, 0.80]}
+    alpha_C_EUR: [0.30, 0.80]
+    alpha_D_EUR: [0.30, 0.80]
+  trader:
+    alpha_R_EUR: [0.20, 0.80]
+    alpha_C_EUR: [0.20, 0.80]
+    alpha_D_EUR: [0.20, 0.80]
+regime_flags: [g_NR, g_PAE, g_TE, g_AEO, g_ACC, g_EXT, g_CIRC]
+regime_rules:
+  - "g_TE <= g_PAE"
+  - "g_CIRC=1 only if family in {importer, processor, trader}"
+  - "g_CIRC=0 for exporter"
+  - "not (g_PAE=1 and family=importer)"
+  - "g_NR=1 implies g_PAE=1"
+  - "g_PAE=1 implies g_ACC=1"
+regime_prior_method: "author_calibrated_score_weights"
+regime_prior_note: "Feasible states are enumerated from regime_rules and assigned transparent author-calibrated score priors."
+regime_score_weights:
+  base: 1.00
+  g_NR: 0.55
+  g_PAE: 0.85
+  g_TE: 0.70
+  g_AEO: 1.20
+  g_ACC: 1.15
+  g_EXT: 1.10
+  g_CIRC: 0.95
+regime_bound_effects:
+  g_NR:
+    h_R: {shift_pct: -0.05}
+    beta: {shift_pct: 0.05}
+    c: {shift_pct: 0.10}
+    lambda: {shift_pct: -0.10}
+    sigma_Q: {shift_pct: 0.15}
+    fx_debt_service_share: {shift_pct: 0.00}
+  g_PAE:
+    h_R: {shift_pct: 0.05}
+    beta: {shift_pct: -0.05}
+    c: {shift_pct: 0.05}
+    lambda: {shift_pct: 0.10}
+    sigma_Q: {shift_pct: -0.05}
+    fx_debt_service_share: {shift_pct: 0.00}
+  g_TE:
+    h_R: {shift_pct: 0.03}
+    beta: {shift_pct: -0.02}
+    c: {shift_pct: 0.00}
+    lambda: {shift_pct: 0.05}
+    sigma_Q: {shift_pct: -0.03}
+    fx_debt_service_share: {shift_pct: 0.00}
+  g_AEO:
+    h_R: {shift_pct: 0.04}
+    beta: {shift_pct: -0.03}
+    c: {shift_pct: 0.00}
+    lambda: {shift_pct: 0.06}
+    sigma_Q: {shift_pct: -0.04}
+    fx_debt_service_share: {shift_pct: 0.00}
+  g_ACC:
+    h_R: {shift_pct: 0.00}
+    beta: {shift_pct: 0.00}
+    c: {shift_pct: 0.00}
+    lambda: {shift_pct: 0.08}
+    sigma_Q: {shift_pct: -0.02}
+    fx_debt_service_share: {shift_pct: 0.00}
+  g_EXT:
+    h_R: {shift_pct: 0.00}
+    beta: {shift_pct: 0.00}
+    c: {shift_pct: 0.00}
+    lambda: {shift_pct: -0.03}
+    sigma_Q: {shift_pct: 0.05}
+    fx_debt_service_share: {shift_pct: 0.20}
+  g_CIRC:
+    h_R: {shift_pct: 0.00}
+    beta: {shift_pct: 0.00}
+    c: {shift_pct: -0.10}
+    lambda: {shift_pct: 0.05}
+    sigma_Q: {shift_pct: 0.02}
+    fx_debt_service_share: {shift_pct: 0.00}
+lambda_clip: {lower: 0.00, upper: 0.95}

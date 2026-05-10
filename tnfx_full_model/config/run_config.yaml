@@ -1,0 +1,17 @@
+seed: 0
+sobol_dimension: 15
+sobol_burn_in: 1024
+target_profiles: 5000
+pilot_points: 1000
+acceptance_fail_floor: 0.30
+acceptance_hard_floor: 0.50
+acceptance_warning_floor: 0.65
+prior_modes: ["nominal", "firm_count", "trade_flow"]
+primary_prior_mode: "nominal"
+output_dir: "data/outputs"
+excel_workbook: "tnfx_full_model_results.xlsx"
+export_csv: true
+valuation_date: "2024-01-01"
+max_excel_rows_per_sheet: 50000
+sampling_mode: "stratified_by_family"
+require_all_macro_priors_pass: false

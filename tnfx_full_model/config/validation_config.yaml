@@ -1,0 +1,7 @@
+tolerances:
+  identity: 1.0e-10
+  cip_relative: 1.0e-6
+  gamma_target: 1.0e-6
+  regime_prior_abs: 0.05
+forbidden_columns: ["pi_F", "kappa", "delta_quantity_adjusted"]
+forbidden_features: ["options", "stage3_cip_basis", "pdf_reporting", "cvar_optimizer"]
