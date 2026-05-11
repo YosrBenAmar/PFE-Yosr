@@ -1,0 +1,29 @@
+run_id,check_id,stage,check_name,result,severity,n_violations,example_violation,notes
+20260511_090921,1,Stage 1.5,every_accepted_profile_has_handoff,pass,hard,0,[],
+20260511_090921,2,Stage 1,accepted_profiles_all_four_families,pass,hard,0,"['exporter', 'importer', 'processor', 'trader']",
+20260511_090921,3,Stage 1.5,inactive_profiles_do_not_have_handoff,pass,hard,0,[],
+20260511_090921,4,Stage 1.5,every_accepted_profile_has_handoff_or_inactive_status,pass,hard,0,[],
+20260511_090921,5,Stage 1,alpha_R_complements_sum_to_one,pass,hard,0,,
+20260511_090921,6,Stage 1,alpha_C_complements_sum_to_one,pass,hard,0,,
+20260511_090921,7,Stage 1,alpha_D_complements_sum_to_one_if_g_EXT,pass,hard,0,,
+20260511_090921,8,Stage 1,debt_share_zero_if_g_EXT_zero,pass,hard,0,[],
+20260511_090921,9,Stage 1,delta_CF_currency_identity,pass,hard,0,[],
+20260511_090921,10,Stage 1,delta_net_currency_identity,pass,hard,0,[],
+20260511_090921,11,Stage 1,accepted_family_distribution_vs_prior,pass,hard,0,"{'importer': 0.0, 'exporter': 0.0, 'processor': 0.0, 'trader': 0.0}",Absolute difference must be <= 2 percentage points under stratified mode.
+20260511_090921,12,Stage 1,macro_anchor_nominal_status,pass,hard,0,"[{'prior_mode': 'nominal', 'importer_weight': 0.35, 'exporter_weight': 0.2, 'processor_weight': 0.3, 'trader_weight': 0.15, 'weighted_delta_CF_total': -0.03154904363977204, 'lower_bound': -0.1, 'upper_bound': -0.03, 'pass_fail': 'pass', 'macro_anchor_status': 'nominal_pass_only_prior_sensitive', 'in",
+20260511_090921,13,Stage 1,macro_anchor_alternative_prior_status,fail,warning,2,"[{'prior_mode': 'firm_count', 'importer_weight': 0.45, 'exporter_weight': 0.15, 'processor_weight': 0.25, 'trader_weight': 0.15, 'weighted_delta_CF_total': -0.10978533360614619, 'lower_bound': -0.1, 'upper_bound': -0.03, 'pass_fail': 'fail', 'macro_anchor_status': 'nominal_pass_only_prior_sensitive'",Alternative-prior failures are prior-sensitivity warnings unless require_all_macro_priors_pass=true.
+20260511_090921,14,Stage 1,no_pi_F_column,pass,hard,0,,
+20260511_090921,15,Stage 1,no_kappa_column,pass,hard,0,,
+20260511_090921,16,Stage 1,no_old_d_FX_column,pass,hard,0,,
+20260511_090921,17,Stage 1,processor_acceptance_rate_threshold,pass,hard,0,{2: 0.803},
+20260511_090921,18,Stage 1,trader_acceptance_rate_threshold,pass,hard,0,{3: 1.0},Trader >=0.65 is preferred and tracked by acceptance warning floor.
+20260511_090921,19,Stage 1,sobol_burn_in_recorded,pass,hard,0,1024,
+20260511_090921,20,Stage 1,sobol_dimension_is_15,pass,hard,0,15,
+20260511_090921,21,Stage 1,tenor_weights_sum_to_one,pass,hard,0,{},
+20260511_090921,22,Stage 1.5,handoff_rows_are_18_or_36,pass,hard,0,{},
+20260511_090921,23,Stage 1.5,handoff_E_t_sums_to_delta_net_k,pass,hard,0,[],
+20260511_090921,24,Stage 1,no_forbidden_columns_anywhere,pass,hard,0,set(),
+20260511_090921,25,Stage 1,g_CIRC_zero_for_exporter,pass,hard,0,[],
+20260511_090921,26,Stage 1,g_CIRC_present_in_import_leg_families,pass,info,0,,
+20260511_090921,27,Reporting,excel_preview_contains_all_families_when_available,pass,hard,0,,Family-stratified Excel preview should include all families present in full handoff.
+20260511_090921,28,Reporting,family_summary_sheets_present,pass,hard,0,,

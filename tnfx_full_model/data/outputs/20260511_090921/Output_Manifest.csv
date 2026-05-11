@@ -1,0 +1,21 @@
+run_id,table_name,file_name,file_path,n_rows,n_columns,export_status,export_timestamp
+20260511_090921,Accepted_Profiles,Accepted_Profiles.csv,C:\Users\USER\Desktop\PFE\PFE CODE\tnfx_full_model\data\outputs\20260511_090921\Accepted_Profiles.csv,5000,32,exported,2026-05-11T09:09:49
+20260511_090921,Inactive_Profiles,Inactive_Profiles.csv,C:\Users\USER\Desktop\PFE\PFE CODE\tnfx_full_model\data\outputs\20260511_090921\Inactive_Profiles.csv,1,33,exported,2026-05-11T09:09:49
+20260511_090921,BM_Exposure_Diagnostics,BM_Exposure_Diagnostics.csv,C:\Users\USER\Desktop\PFE\PFE CODE\tnfx_full_model\data\outputs\20260511_090921\BM_Exposure_Diagnostics.csv,5000,22,exported,2026-05-11T09:09:49
+20260511_090921,Rejection_Log,Rejection_Log.csv,C:\Users\USER\Desktop\PFE\PFE CODE\tnfx_full_model\data\outputs\20260511_090921\Rejection_Log.csv,5366,7,exported,2026-05-11T09:09:49
+20260511_090921,Sobol_Acceptance,Sobol_Acceptance.csv,C:\Users\USER\Desktop\PFE\PFE CODE\tnfx_full_model\data\outputs\20260511_090921\Sobol_Acceptance.csv,4,9,exported,2026-05-11T09:09:49
+20260511_090921,Sobol_Meta,Sobol_Meta.csv,C:\Users\USER\Desktop\PFE\PFE CODE\tnfx_full_model\data\outputs\20260511_090921\Sobol_Meta.csv,1,7,exported,2026-05-11T09:09:49
+20260511_090921,Timing_CV_Scenarios,Timing_CV_Scenarios.csv,C:\Users\USER\Desktop\PFE\PFE CODE\tnfx_full_model\data\outputs\20260511_090921\Timing_CV_Scenarios.csv,3,4,exported,2026-05-11T09:09:49
+20260511_090921,Regime_State_Priors,Regime_State_Priors.csv,C:\Users\USER\Desktop\PFE\PFE CODE\tnfx_full_model\data\outputs\20260511_090921\Regime_State_Priors.csv,136,13,exported,2026-05-11T09:09:49
+20260511_090921,Tenor_Weights,Tenor_Weights.csv,C:\Users\USER\Desktop\PFE\PFE CODE\tnfx_full_model\data\outputs\20260511_090921\Tenor_Weights.csv,90000,10,exported,2026-05-11T09:09:50
+20260511_090921,Stage_1_5_Handoff,Stage_1_5_Handoff.csv,C:\Users\USER\Desktop\PFE\PFE CODE\tnfx_full_model\data\outputs\20260511_090921\Stage_1_5_Handoff.csv,176634,35,exported,2026-05-11T09:09:55
+20260511_090921,Macro_Anchor_Check,Macro_Anchor_Check.csv,C:\Users\USER\Desktop\PFE\PFE CODE\tnfx_full_model\data\outputs\20260511_090921\Macro_Anchor_Check.csv,3,12,exported,2026-05-11T09:09:55
+20260511_090921,Sign_Threshold_Sensitivity,Sign_Threshold_Sensitivity.csv,C:\Users\USER\Desktop\PFE\PFE CODE\tnfx_full_model\data\outputs\20260511_090921\Sign_Threshold_Sensitivity.csv,14,6,exported,2026-05-11T09:09:55
+20260511_090921,Tenor_Weights_Preview,Tenor_Weights_Preview.csv,C:\Users\USER\Desktop\PFE\PFE CODE\tnfx_full_model\data\outputs\20260511_090921\Tenor_Weights_Preview.csv,50000,11,exported,2026-05-11T09:09:56
+20260511_090921,Stage_1_5_Handoff_Preview,Stage_1_5_Handoff_Preview.csv,C:\Users\USER\Desktop\PFE\PFE CODE\tnfx_full_model\data\outputs\20260511_090921\Stage_1_5_Handoff_Preview.csv,50000,35,exported,2026-05-11T09:09:57
+20260511_090921,Stage_2_Decisions_Preview,Stage_2_Decisions_Preview.csv,C:\Users\USER\Desktop\PFE\PFE CODE\tnfx_full_model\data\outputs\20260511_090921\Stage_2_Decisions_Preview.csv,0,1,exported,2026-05-11T09:09:57
+20260511_090921,Family_Profile_Summary,Family_Profile_Summary.csv,C:\Users\USER\Desktop\PFE\PFE CODE\tnfx_full_model\data\outputs\20260511_090921\Family_Profile_Summary.csv,4,16,exported,2026-05-11T09:09:57
+20260511_090921,Family_Handoff_Summary,Family_Handoff_Summary.csv,C:\Users\USER\Desktop\PFE\PFE CODE\tnfx_full_model\data\outputs\20260511_090921\Family_Handoff_Summary.csv,4,10,exported,2026-05-11T09:09:57
+20260511_090921,Family_Stage2_Summary,Family_Stage2_Summary.csv,C:\Users\USER\Desktop\PFE\PFE CODE\tnfx_full_model\data\outputs\20260511_090921\Family_Stage2_Summary.csv,0,11,exported,2026-05-11T09:09:57
+20260511_090921,Validation_Checks,Validation_Checks.csv,C:\Users\USER\Desktop\PFE\PFE CODE\tnfx_full_model\data\outputs\20260511_090921\Validation_Checks.csv,28,9,exported,2026-05-11T09:09:57
+20260511_090921,Methodology_Status,Methodology_Status.csv,C:\Users\USER\Desktop\PFE\PFE CODE\tnfx_full_model\data\outputs\20260511_090921\Methodology_Status.csv,12,5,exported,2026-05-11T09:09:57

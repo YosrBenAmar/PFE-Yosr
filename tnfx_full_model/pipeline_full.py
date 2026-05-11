@@ -211,8 +211,5 @@ def run_full():
 
 
 if __name__ == "__main__":
-    try:
-        _, path = run_full()
-    except (FileNotFoundError, ValueError) as exc:
-        raise SystemExit(f"pipeline_full.py stopped: {exc}") from exc
+    _, path = run_full()
     print(f"Full pipeline complete. Workbook: {path}")

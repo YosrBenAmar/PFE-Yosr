@@ -1,0 +1,4 @@
+run_id,timing_cv_scenario,timing_CV,role
+20260511_090921,low,0.25,exposure_timing_dispersion
+20260511_090921,baseline,0.4,exposure_timing_dispersion
+20260511_090921,high,0.6,exposure_timing_dispersion

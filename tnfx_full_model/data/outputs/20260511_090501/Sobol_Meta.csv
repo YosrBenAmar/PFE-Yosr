@@ -1,0 +1,2 @@
+run_id,seed,sobol_dimension,sobol_burn_in,first_points_skipped,sampling_mode,prior_mode
+20260511_090501,0,15,1024,1024,stratified_by_family,nominal

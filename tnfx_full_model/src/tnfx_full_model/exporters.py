@@ -272,12 +272,17 @@ def _methodology_status(tables: dict[str, pd.DataFrame], run_config: dict) -> pd
     rolling = tables.get("Rolling_Market_Performance", pd.DataFrame())
     oos = tables.get("Split_OOS_Performance", pd.DataFrame())
     realized_status = "implemented_via_workbook_forwards" if isinstance(rolling, pd.DataFrame) and not rolling.empty else "not_implemented"
+    realized_explanation = (
+        "Rolling market-side backtest computed on ~116k historical forward observations from Forwards_calculations.xlsx spanning 2007-2026, across five hedge intensity scenarios and two CIP stress scenarios. See Rolling_Market_Performance.csv."
+        if realized_status == "implemented_via_workbook_forwards"
+        else "Rolling market-side backtest not computed in this run because Rolling_Market_Performance is missing or empty."
+    )
     true_oos = isinstance(oos, pd.DataFrame) and not oos.empty and "split_specific_gamma_used" in oos.columns and bool(oos["split_specific_gamma_used"].astype(bool).any())
     return pd.DataFrame([
         {"item": "Stage 1 profile engine", "status": "implemented", "severity": "info", "explanation": ""},
         {"item": "Stage 1.5 currency-tenor handoff", "status": "implemented", "severity": "info", "explanation": ""},
         {"item": "Global Stage 2 hedge-decision engine", "status": "implemented", "severity": "info", "explanation": ""},
-        {"item": "Historical realized backtest", "status": realized_status, "severity": "info", "explanation": "Rolling market-side backtest computed on ~116k historical forward observations from Forwards_calculations.xlsx spanning 2007-2026, across five hedge intensity scenarios and two CIP stress scenarios. See Rolling_Market_Performance.csv."},
+        {"item": "Historical realized backtest", "status": realized_status, "severity": "info", "explanation": realized_explanation},
         {"item": "True train/test out-of-sample backtest", "status": "implemented" if true_oos else "not_implemented", "severity": "info" if true_oos else ("warning" if not run_config.get("require_true_oos_backtest", False) else "hard"), "explanation": "Walk-forward expanding-window splits with split-specific gamma_R recalibration on training data only. Decisions recomputed per split, not filtered from global decisions. See Split_OOS_Performance.csv and Gamma_R_Calibration_By_Split.csv." if true_oos else "Current split tables are diagnostic unless split_specific_gamma_used=true."},
         {"item": "CIP+50bps stress scenario", "status": "implemented", "severity": "info", "explanation": "CIP+50bps consumed by optimizer as a parallel forward_stress_scenario. Compare with cip_base in Rolling_Market_Performance.csv via groupby forward_stress_scenario."},
         {"item": "Per-profile time-series P&L", "status": "not_produced_by_design", "severity": "info", "explanation": "Synthetic profiles are static Sobol draws and have no temporal identity. Per-profile drilldown is on-demand only via the Streamlit interface (Session 2)."},

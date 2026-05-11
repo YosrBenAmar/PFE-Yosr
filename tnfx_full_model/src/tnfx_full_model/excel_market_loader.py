@@ -597,9 +597,16 @@ def _populate_realized_from_history(market: pd.DataFrame, spot_history: pd.DataF
     hist = spot_history.copy()
     hist["date"] = pd.to_datetime(hist["date"], errors="coerce")
     hist = hist[hist["date"].notna()].sort_values(["currency_pair", "date"])
-    out["realized_future_date"] = out.get("realized_future_date", pd.NaT)
-    out["realized_future_spot_bid"] = out.get("realized_future_spot_bid", np.nan)
-    out["realized_future_spot_ask"] = out.get("realized_future_spot_ask", np.nan)
+    if "realized_future_date" not in out.columns:
+        out["realized_future_date"] = pd.NaT
+    if "realized_future_spot_bid" not in out.columns:
+        out["realized_future_spot_bid"] = np.nan
+    if "realized_future_spot_ask" not in out.columns:
+        out["realized_future_spot_ask"] = np.nan
+    # Force stable dtypes so row-wise assignment of datetimes and floats cannot upcast-fail.
+    out["realized_future_date"] = pd.to_datetime(out["realized_future_date"], errors="coerce")
+    out["realized_future_spot_bid"] = pd.to_numeric(out["realized_future_spot_bid"], errors="coerce")
+    out["realized_future_spot_ask"] = pd.to_numeric(out["realized_future_spot_ask"], errors="coerce")
     status_list = []
     for idx, row in out.iterrows():
         pair = row.get("currency_pair")
