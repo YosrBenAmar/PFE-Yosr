@@ -1,0 +1,10 @@
+tnfx_full_model/data/
+data/
+tnfx_full_model/data/cache/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_tmp/
+.pytest_tmp_run/
+.pytest_cache/
