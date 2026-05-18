@@ -72,7 +72,14 @@ def run_backtest(decisions: pd.DataFrame, sub_periods: dict, require_backtest: b
     df["pnl"] = [row_pnl(r) for r in df.to_dict("records")]
     df["pnl_normalized"] = df["pnl"] / df["S0"]
     df["sub_period"] = df["realized_future_date"].apply(lambda d: assign_sub_period(d, sub_periods))
-    keys = ["profile_id", "currency_pair", "timing_cv_scenario", "hedge_intensity_scenario", "tenor_months", "sub_period"]
+    if "valuation_date" not in df.columns:
+        df["valuation_date"] = "unknown"
+    if df["valuation_date"].nunique() == 1:
+        keys = ["currency_pair", "timing_cv_scenario",
+                "hedge_intensity_scenario", "tenor_months", "sub_period"]
+    else:
+        keys = ["profile_id", "currency_pair", "timing_cv_scenario",
+                "hedge_intensity_scenario", "tenor_months", "sub_period"]
     rows = []
     for key, grp in df.groupby(keys, dropna=False):
         vals = grp["pnl_normalized"].sort_values()

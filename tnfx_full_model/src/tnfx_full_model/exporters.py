@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 import shutil
+import time
 from pathlib import Path
 
 import numpy as np
@@ -301,10 +302,13 @@ def export_tables(
     run_id: str | None = None,
     output_dir_override: Path | None = None,
     workbook_name_override: str | None = None,
+    write_csv: bool = True,
+    write_workbook: bool = True,
+    csv_include_tables: set[str] | None = None,
 ) -> Path:
     out_dir = output_dir_override or config.output_dir
     out_dir.mkdir(parents=True, exist_ok=True)
-    export_csv = bool(config.run.get("export_csv", True))
+    export_csv = bool(config.run.get("export_csv", True)) and write_csv
     max_rows = int(config.run.get("max_excel_rows_per_sheet", 1_000_000))
     workbook_name = workbook_name_override or config.run["excel_workbook"]
     workbook = out_dir / workbook_name
@@ -315,19 +319,41 @@ def export_tables(
     manifest_rows = []
     if export_csv:
         for name, df in tables_local.items():
-            if isinstance(df, pd.DataFrame):
-                path = out_dir / f"{name}.csv"
-                df.to_csv(path, index=False)
-                manifest_rows.append({
-                    "run_id": run_id or "",
-                    "table_name": name,
-                    "file_name": path.name,
-                    "file_path": str(path),
-                    "n_rows": int(len(df)),
-                    "n_columns": int(len(df.columns)),
-                    "export_status": "exported",
-                    "export_timestamp": datetime.now().isoformat(timespec="seconds"),
-                })
+            if not isinstance(df, pd.DataFrame):
+                continue
+            if csv_include_tables is not None and name not in csv_include_tables:
+                continue
+            path = out_dir / f"{name}.csv"
+            temp_path = out_dir / f".{name}.csv.tmp"
+            status = "exported"
+            error_message = ""
+            for attempt in range(1, 5):
+                try:
+                    df.to_csv(temp_path, index=False)
+                    temp_path.replace(path)
+                    break
+                except (PermissionError, OSError) as exc:
+                    status = "failed"
+                    error_message = str(exc)
+                    if temp_path.exists():
+                        try:
+                            temp_path.unlink()
+                        except OSError:
+                            pass
+                    if attempt == 4:
+                        break
+                    time.sleep(0.5 * attempt)
+            manifest_rows.append({
+                "run_id": run_id or "",
+                "table_name": name,
+                "file_name": path.name,
+                "file_path": str(path),
+                "n_rows": int(len(df)),
+                "n_columns": int(len(df.columns)),
+                "export_status": status,
+                "export_timestamp": datetime.now().isoformat(timespec="seconds"),
+                "error_message": error_message,
+            })
     excel_tables = dict(tables_local)
     excel_tables["Config_Summary"] = _ensure_run_id_column(config_summary(config, run_id), run_id)
     large_preview_map = {
@@ -350,7 +376,7 @@ def export_tables(
         if export_csv:
             excel_tables["Output_Manifest"].to_csv(out_dir / "Output_Manifest.csv", index=False)
     else:
-        excel_tables["Output_Manifest"] = pd.DataFrame(columns=["run_id", "table_name", "file_name", "file_path", "n_rows", "n_columns", "export_status", "export_timestamp"])
+        excel_tables["Output_Manifest"] = pd.DataFrame(columns=["run_id", "table_name", "file_name", "file_path", "n_rows", "n_columns", "export_status", "export_timestamp", "error_message"])
     excel_tables["README_Run"] = _ensure_run_id_column(readme_run(config, truncated, stage, tables_local, run_id), run_id)
 
     def _write_excel(target: Path) -> None:
@@ -367,15 +393,24 @@ def export_tables(
                     width = min(max(len(str(cell.value)) if cell.value is not None else 0 for cell in sample_cells) + 2, 40)
                     ws.column_dimensions[get_column_letter(idx)].width = width
 
+    if not write_workbook:
+        return workbook
     try:
         _write_excel(workbook)
         latest = config.root / "data" / "outputs" / "tnfx_full_model_results_latest.xlsx"
         shutil.copyfile(workbook, latest)
         return workbook
     except PermissionError:
-        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        fallback = workbook.with_name(f"{workbook.stem}_{stamp}{workbook.suffix}")
-        _write_excel(fallback)
-        latest = config.root / "data" / "outputs" / "tnfx_full_model_results_latest.xlsx"
-        shutil.copyfile(fallback, latest)
-        return fallback
+        time.sleep(0.5)
+        try:
+            _write_excel(workbook)
+            latest = config.root / "data" / "outputs" / "tnfx_full_model_results_latest.xlsx"
+            shutil.copyfile(workbook, latest)
+            return workbook
+        except PermissionError:
+            stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            fallback = workbook.with_name(f"{workbook.stem}_{stamp}{workbook.suffix}")
+            _write_excel(fallback)
+            latest = config.root / "data" / "outputs" / "tnfx_full_model_results_latest.xlsx"
+            shutil.copyfile(fallback, latest)
+            return fallback

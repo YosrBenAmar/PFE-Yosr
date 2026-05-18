@@ -1,4 +1,0 @@
-run_id,prior_mode,importer_weight,exporter_weight,processor_weight,trader_weight,weighted_delta_CF_total,lower_bound,upper_bound,pass_fail,macro_anchor_status,interpretation
-20260511_090921,nominal,0.35,0.2,0.3,0.15,-0.03154904363977204,-0.1,-0.03,pass,nominal_pass_only_prior_sensitive,The synthetic population is calibrated under the nominal prior. Alternative priors are treated as sensitivity views and indicate prior dependence.
-20260511_090921,firm_count,0.45,0.15,0.25,0.15,-0.10978533360614619,-0.1,-0.03,fail,nominal_pass_only_prior_sensitive,The synthetic population is calibrated under the nominal prior. Alternative priors are treated as sensitivity views and indicate prior dependence.
-20260511_090921,trade_flow,0.3,0.2,0.4,0.1,-0.0007357885584313877,-0.1,-0.03,fail,nominal_pass_only_prior_sensitive,The synthetic population is calibrated under the nominal prior. Alternative priors are treated as sensitivity views and indicate prior dependence.

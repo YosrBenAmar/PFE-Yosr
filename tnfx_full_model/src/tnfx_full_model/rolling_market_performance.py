@@ -46,7 +46,7 @@ def _prepare_base_forward(forward_backtest_long: pd.DataFrame, spot_history_long
     base["hedge_n_days"] = pd.to_numeric(base["hedge_n_days"], errors="coerce")
     for col in ["hedge_spot_rate", "forward_rate", "realized_spot", "realized_forward_advantage"]:
         base[col] = pd.to_numeric(base[col], errors="coerce")
-    base = base[base["hedge_transaction_date"].notna()].copy()
+    base = base[base["hedge_transaction_date"].notna() & base["currency_pair"].notna()].copy()
 
     history = spot_history_long.copy()
     history["date"] = pd.to_datetime(history["date"], errors="coerce")
@@ -57,8 +57,18 @@ def _prepare_base_forward(forward_backtest_long: pd.DataFrame, spot_history_long
         lambda s: s.rolling(vol_window_days, min_periods=30).std(ddof=1) * np.sqrt(252.0)
     )
     sigma_table = history[["currency_pair", "date", "sigma_annual"]].drop_duplicates(["currency_pair", "date"]).sort_values(["currency_pair", "date"])
+    sigma_table = sigma_table[sigma_table["date"].notna() & sigma_table["currency_pair"].notna()].copy()
 
     base = base.sort_values(["currency_pair", "hedge_transaction_date", "tenor_months", "transaction_date"]).reset_index(drop=True)
+    base["currency_pair"] = base["currency_pair"].astype(str)
+    sigma_table["currency_pair"] = sigma_table["currency_pair"].astype(str)
+    base = base.sort_values(
+        ["hedge_transaction_date", "currency_pair"], kind="mergesort"
+    ).reset_index(drop=True)
+    
+    sigma_table = sigma_table.sort_values(
+        ["date", "currency_pair"], kind="mergesort"
+    ).reset_index(drop=True)
     merged = pd.merge_asof(
         base,
         sigma_table,

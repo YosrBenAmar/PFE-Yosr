@@ -1,5 +1,0 @@
-run_id,family,drawn,accepted,active_accepted,conditional_h_C_interval_empty,acceptance_rate,active_acceptance_rate,status
-20260511_090921,importer,1000,1000,1000,0,1.0,1.0,pass
-20260511_090921,exporter,1000,1000,1000,0,1.0,1.0,pass
-20260511_090921,processor,1000,803,801,197,0.803,0.801,pass
-20260511_090921,trader,1000,1000,999,0,1.0,0.999,pass

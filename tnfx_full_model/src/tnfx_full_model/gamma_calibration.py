@@ -24,8 +24,11 @@ def solve_gamma_for_target(target: float, E: float, sigma_E: float, rho: float, 
 
 def calibrate_gamma_R(accepted: pd.DataFrame, diagnostics: pd.DataFrame, market_snapshot: pd.DataFrame, targets: dict[str, float]) -> tuple[dict[str, float], pd.DataFrame]:
     diag = diagnostics.set_index("profile_id")
-    signed = float(diag["delta_net_EUR"].median())
-    E = abs(signed) if abs(signed) > 1e-8 else float(diag["delta_net_EUR"].abs().median())
+    importer_mask = diag["family"] == "importer"
+    if importer_mask.any():
+        E = float(diag.loc[importer_mask, "delta_net_EUR"].abs().median())
+    else:
+        E = float(diag["delta_net_EUR"].abs().median())
     rho = float(accepted["rho"].median())
     sigma_Q = float(accepted["sigma_Q"].median())
     bench_keys = [("EUR_TND", 6), ("USD_TND", 6), ("EUR_TND", 12)]
@@ -61,4 +64,3 @@ def calibrate_gamma_R(accepted: pd.DataFrame, diagnostics: pd.DataFrame, market_
         )
         detail_df["robustness_warning"] = detail_df["variation_pct"] > 0.30
     return calibrated, detail_df
-

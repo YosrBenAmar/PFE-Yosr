@@ -1,8 +1,8 @@
 families:
   importer:
     label: "Pure Importer"
-    h_R: [0.00, 0.15]
-    h_C: [0.35, 0.90]
+    h_R: [0.10, 0.25]
+    h_C: [0.35, 0.82]
     r: [0.03, 0.20]
     beta: [0.75, 0.90]
     fx_debt_service_share: [0.00, 0.06]
@@ -29,8 +29,8 @@ families:
     import_leg: false
   processor:
     label: "Two-Sided Long-Cycle Processor"
-    h_R: [0.40, 1.00]
-    h_C: [0.25, 0.80]
+    h_R: [0.35, 0.58]
+    h_C: [0.55, 0.85]
     r: [0.04, 0.18]
     beta: [0.10, 0.55]
     fx_debt_service_share: [0.00, 0.07]

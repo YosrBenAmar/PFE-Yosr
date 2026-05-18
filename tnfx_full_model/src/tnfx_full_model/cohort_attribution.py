@@ -51,7 +51,7 @@ def compute_profile_cohort_attribution(
     handoff = stage_1_5_handoff.copy()
     if "lambda" not in handoff.columns:
         raise ValueError("Stage_1_5_Handoff is missing lambda column")
-    handoff = handoff.merge(sample[["profile_id", "family", "lambda"]].drop_duplicates(), on=["profile_id", "family"], how="inner")
+    handoff = handoff.merge(sample[["profile_id", "family"]].drop_duplicates(), on=["profile_id", "family"], how="inner")
     handoff = handoff.copy()
     handoff["abs_E_t"] = pd.to_numeric(handoff["E_t"], errors="coerce").abs()
 
