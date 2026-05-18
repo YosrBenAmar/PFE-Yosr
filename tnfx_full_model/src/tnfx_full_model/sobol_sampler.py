@@ -65,6 +65,10 @@ def _candidate_from_u(
         "sigma_Q": scale(u[10], spec["sigma_Q"]),
         "rho": scale(u[11], spec["rho"]),
         "f": scale(u[12], spec["f"]),
+        # f: frequency proxy for exposure crystallisation events.
+        # Carried in Sobol dim 13 to preserve 15-D low-discrepancy structure.
+        # Not consumed by Stage 1, 1.5, or Stage 2 computations.
+        # Reserved for Stage 3 intra-period settlement frequency modeling.
     }
     values = apply_regime_effects(values, spec, regime, model_config)
     h_c_conditional = conditional_h_c_bounds_for_family(

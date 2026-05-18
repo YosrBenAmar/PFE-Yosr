@@ -6,6 +6,10 @@ ACCEPTED_PROFILE_COLUMNS = [
     "alpha_D_EUR", "alpha_D_USD", "c", "lambda", "sigma_Q", "rho", "f",
     "target_prior_family_share", "accepted_sample_family_share", "sampling_weight",
 ]
+# f: frequency proxy for exposure crystallisation events.
+# Carried in Sobol dim 13 to preserve 15-D low-discrepancy structure.
+# Not consumed by Stage 1, 1.5, or Stage 2 computations.
+# Reserved for Stage 3 intra-period settlement frequency modeling.
 
 HANDOFF_COLUMNS = [
     "profile_id", "family", "subtype", "currency", "currency_pair",

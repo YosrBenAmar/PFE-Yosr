@@ -43,8 +43,19 @@ def calibrate_gamma_R(accepted: pd.DataFrame, diagnostics: pd.DataFrame, market_
             if row.empty:
                 continue
             r = row.iloc[0]
+            carry_cost = float(r["carry_cost"])
+            forward_bias_placeholder = 0.0
+            if carry_cost + forward_bias_placeholder <= 0:
+                status = "negative_carry_cost_skipped"
+                details.append({"hedge_intensity_scenario": scenario, "target_intensity": tau, "currency_pair": pair,
+                                "tenor_months": tenor, "gamma_R": np.nan, "status": status})
+                continue
             try:
-                gamma = solve_gamma_for_target(tau, E, float(r["sigma_E"]), rho, sigma_Q, float(r["spot_mid"]), float(r["carry_cost"]))
+                # Use spot_ask for calibration benchmark: importer outflows execute at ASK.
+                # Falls back to spot_mid for backward compatibility if ASK not present.
+                gamma = solve_gamma_for_target(
+                    tau, E, float(r["sigma_E"]), rho, sigma_Q, float(r.get("spot_ask", r["spot_mid"])), carry_cost
+                )
                 gammas.append(gamma)
                 status = "ok"
             except ValueError as exc:
