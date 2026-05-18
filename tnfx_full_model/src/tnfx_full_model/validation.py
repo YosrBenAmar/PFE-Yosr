@@ -221,11 +221,19 @@ def validate_stage2(tables: dict, market_config: dict, output_dir: Path | None =
     checks.append(_check(cid, "Stage 2", "variance_hedged_nonnegative", var_h_bad.empty, "hard", len(var_h_bad), var_h_bad.head().to_dict("records"))); cid += 1
 
     he_above = decisions[decisions["HE_t"] > 1 + 1e-8]
-    checks.append(_check(cid, "Stage 2", "HE_t_not_above_one", he_above.empty, "hard", len(he_above), he_above.head().to_dict("records"))); cid += 1
+    checks.append(_check(
+        cid, "Stage 2", "HE_t_not_above_one", he_above.empty, "hard",
+        len(he_above), he_above.head().to_dict("records"),
+        notes="HE_t in Stage_2_Decisions uses profile-specific rho and sigma_Q. HE_t in Rolling_Market_Performance uses population-median rho and sigma_Q. Both are valid but measure different objects."
+    )); cid += 1
 
     he_too_low = decisions[decisions["HE_t"] < -1]
     he_negative = decisions[(decisions["HE_t"] < 0) & (decisions["HE_t"] >= -1)]
-    checks.append(_check(cid, "Stage 2", "HE_t_reasonable_range", he_too_low.empty, "warning", len(he_too_low), he_too_low.head().to_dict("records"), "HE_t < -1 indicates severe variance increase under hedging.")); cid += 1
+    checks.append(_check(
+        cid, "Stage 2", "HE_t_reasonable_range", he_too_low.empty, "warning",
+        len(he_too_low), he_too_low.head().to_dict("records"),
+        notes="HE_t < -1 indicates severe variance increase under hedging. In the rolling backtest context, this uses population-median parameters and may reflect population mismatch rather than per-profile hedging failure."
+    )); cid += 1
     checks.append(_check(cid, "Stage 2", "HE_t_negative_info_band", he_negative.empty, "info", len(he_negative), he_negative.head().to_dict("records"), "-1 <= HE_t < 0 can occur when hedging increases variance.")); cid += 1
 
     bad_cost = decisions[decisions["expected_cost"] < -1e-12]

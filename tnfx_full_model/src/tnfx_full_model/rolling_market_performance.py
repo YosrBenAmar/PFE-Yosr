@@ -188,6 +188,7 @@ def _build_rows_for_scenario(
         "var_hedged": var_hedged,
         "HE_t": he_t,
         "market_row_status": market_status,
+        "gamma_methodology": "global_calibration_in_sample",
     })
 
 
@@ -225,12 +226,22 @@ def compute_rolling_market_performance(
         "forward_advantage", "sigma_E", "pop_median_rho", "pop_median_sigma_Q",
         "gamma_R_used", "gamma_R_source", "h_star", "h_c", "hedged_pnl_per_unit",
         "unhedged_pnl_per_unit", "relative_gain", "hit_indicator", "var_unhedged",
-        "var_hedged", "HE_t", "market_row_status",
+        "var_hedged", "HE_t", "market_row_status", "gamma_methodology",
     ]
     return result[cols].reset_index(drop=True)
 
 
 def _calibrate_split_gamma(benchmark: pd.DataFrame, target_intensity: float) -> tuple[float, str, int]:
+    """
+    Calibrate gamma_R for a walk-forward split using training data.
+    
+    carry_cost_base is used (not carry_cost_used) because gamma is
+    calibrated under the cip_base scenario. The cip_plus_50bps stress
+    scenario evaluates an already-calibrated strategy under a different
+    cost regime, not a re-calibrated one. This is the methodologically
+    correct approach: calibrate once on realistic base conditions,
+    stress-test the calibrated strategy.
+    """
     if benchmark.empty:
         return np.nan, "calibration_failed", 0
     med_sigma = float(pd.to_numeric(benchmark["sigma_E"], errors="coerce").median())
@@ -262,6 +273,9 @@ def compute_oos_market_performance(
     base = base.assign(rho_median=pop_median_rho, sigma_Q_median=pop_median_sigma_Q)
     train_start = pd.to_datetime(walk_forward_initial_train_start)
     benchmark = base[(base["currency_pair"] == "EUR_TND") & (base["tenor_months"] == 6)].copy()
+    # carry_cost_base = forward premium under CIP (no wedge stress).
+    # This is the calibration benchmark for all gamma_R values.
+    # The CIP+50bps stress scenario applies after calibration, not during it.
     benchmark["carry_cost_base"] = pd.to_numeric(benchmark["forward_rate"], errors="coerce") - pd.to_numeric(benchmark["hedge_spot_rate"], errors="coerce")
 
     calibration_rows = []
@@ -306,6 +320,7 @@ def compute_oos_market_performance(
                     frame = _build_rows_for_scenario(split_base, scenario, target_intensity, stress_scenario, stress_bps, gamma_R, gamma_source, pop_median_rho, pop_median_sigma_Q)
                     frame["split_specific_gamma_used"] = True
                     frame["methodological_status"] = "true_out_of_sample"
+                    frame["gamma_methodology"] = "split_specific_oos"
                     frame["split_id"] = split_id
                     frame["train_start"] = train_start
                     frame["train_end"] = current_train_end
@@ -321,6 +336,7 @@ def compute_oos_market_performance(
                 frame = _build_rows_for_scenario(split_base, scenario, target_intensity, stress_scenario, stress_bps, gamma_R, gamma_source, pop_median_rho, pop_median_sigma_Q)
                 frame["split_specific_gamma_used"] = True
                 frame["methodological_status"] = "true_out_of_sample" if np.isfinite(gamma_R) and status == "ok" else "calibration_failed"
+                frame["gamma_methodology"] = "split_specific_oos"
                 if not np.isfinite(gamma_R) or status != "ok":
                     frame["h_c"] = np.nan
                 frame["split_id"] = split_id
