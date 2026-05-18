@@ -36,6 +36,7 @@ def run_backtest(decisions: pd.DataFrame, sub_periods: dict, require_backtest: b
             "n_rows_backtested": 0,
             "missing_realized_spot_warning": False,
             "n_observations": 0,
+            "backtest_mode": "skipped",
         }])
     if "direction" not in decisions.columns:
         if require_backtest:
@@ -46,6 +47,7 @@ def run_backtest(decisions: pd.DataFrame, sub_periods: dict, require_backtest: b
             "n_rows_backtested": 0,
             "missing_realized_spot_warning": True,
             "n_observations": 0,
+            "backtest_mode": "skipped",
         }])
     df = decisions.copy()
     df["realized_future_spot"] = np.where(
@@ -68,12 +70,14 @@ def run_backtest(decisions: pd.DataFrame, sub_periods: dict, require_backtest: b
             "n_rows_backtested": 0,
             "missing_realized_spot_warning": missing_count > 0,
             "n_observations": 0,
+            "backtest_mode": "skipped",
         }])
     df["pnl"] = [row_pnl(r) for r in df.to_dict("records")]
     df["pnl_normalized"] = df["pnl"] / df["S0"]
     df["sub_period"] = df["realized_future_date"].apply(lambda d: assign_sub_period(d, sub_periods))
     if "valuation_date" not in df.columns:
         df["valuation_date"] = "unknown"
+    backtest_mode = "single_snapshot_aggregate" if df["valuation_date"].nunique() == 1 else "multi_date_profile_level"
     if df["valuation_date"].nunique() == 1:
         keys = ["currency_pair", "timing_cv_scenario",
                 "hedge_intensity_scenario", "tenor_months", "sub_period"]
@@ -94,6 +98,7 @@ def run_backtest(decisions: pd.DataFrame, sub_periods: dict, require_backtest: b
             "n_rows_backtested": int(len(df)),
             "missing_realized_spot_warning": bool(missing_count > 0),
             "status": "backtest_completed" if missing_count == 0 else "backtest_completed_with_missing_rows_dropped",
+            "backtest_mode": backtest_mode,
         }))
     return pd.DataFrame(rows)
 
