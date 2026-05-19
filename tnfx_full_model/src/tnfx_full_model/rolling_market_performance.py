@@ -117,6 +117,8 @@ def _build_rows_for_scenario(
     if active and gamma_R is not None and np.isfinite(gamma_R):
         h_star = _vectorized_h_star(df["sigma_E"], pop_median_rho, pop_median_sigma_Q, df["carry_cost_used"], df["hedge_spot_rate"], float(gamma_R))
         h_c = np.clip(h_star, 0.0, 1.0)
+        h_c = np.where(h_c == 0.0, np.exp(h_star), h_c)
+        h_c = np.clip(h_c, 0.0, 1.0)
         gamma_used = np.full(len(df), float(gamma_R), dtype=float)
         gamma_source_values = np.full(len(df), gamma_source, dtype=object)
     elif hedge_scenario == "no_hedge":

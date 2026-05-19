@@ -566,7 +566,7 @@ def load_forward_backtest_long(
             block["source_sheet"] = sheet_name
             if run_id is not None:
                 block["run_id"] = run_id
-            block = block.dropna(subset=["hedge_transaction_date", "transaction_date", "forward_rate", "realized_spot"])
+            block = block.dropna(subset=["hedge_transaction_date", "transaction_date", "forward_rate", "realized_spot", "domestic_yield", "foreign_yield"])
             all_rows.append(block)
 
     if not all_rows:
