@@ -117,8 +117,6 @@ def _build_rows_for_scenario(
     if active and gamma_R is not None and np.isfinite(gamma_R):
         h_star = _vectorized_h_star(df["sigma_E"], pop_median_rho, pop_median_sigma_Q, df["carry_cost_used"], df["hedge_spot_rate"], float(gamma_R))
         h_c = np.clip(h_star, 0.0, 1.0)
-        h_c = np.where(h_c == 0.0, np.exp(h_star), h_c)
-        h_c = np.clip(h_c, 0.0, 1.0)
         gamma_used = np.full(len(df), float(gamma_R), dtype=float)
         gamma_source_values = np.full(len(df), gamma_source, dtype=object)
     elif hedge_scenario == "no_hedge":
@@ -234,23 +232,15 @@ def compute_rolling_market_performance(
 
 
 def _calibrate_split_gamma(benchmark: pd.DataFrame, target_intensity: float) -> tuple[float, str, int]:
-    """
-    Calibrate gamma_R for a walk-forward split using training data.
-    
-    carry_cost_base is used (not carry_cost_used) because gamma is
-    calibrated under the cip_base scenario. The cip_plus_50bps stress
-    scenario evaluates an already-calibrated strategy under a different
-    cost regime, not a re-calibrated one. This is the methodologically
-    correct approach: calibrate once on realistic base conditions,
-    stress-test the calibrated strategy.
-    """
     if benchmark.empty:
         return np.nan, "calibration_failed", 0
     med_sigma = float(pd.to_numeric(benchmark["sigma_E"], errors="coerce").median())
-    med_s0 = float(pd.to_numeric(benchmark["hedge_spot_rate"], errors="coerce").median())
+    med_s0    = float(pd.to_numeric(benchmark["hedge_spot_rate"], errors="coerce").median())
     med_carry = float(pd.to_numeric(benchmark["carry_cost_base"], errors="coerce").median())
-    rho = float(pd.to_numeric(benchmark["rho_median"], errors="coerce").median())
-    sigma_q = float(pd.to_numeric(benchmark["sigma_Q_median"], errors="coerce").median())
+    rho       = float(pd.to_numeric(benchmark["rho_median"], errors="coerce").median())
+    sigma_q   = float(pd.to_numeric(benchmark["sigma_Q_median"], errors="coerce").median())
+    if med_sigma <= 0 or med_s0 <= 0 or med_carry <= 0:
+        return np.nan, "calibration_failed_bad_inputs", int(len(benchmark))
     try:
         gamma = solve_gamma_for_target(target_intensity, 1.0, med_sigma, rho, sigma_q, med_s0, med_carry)
         return float(gamma), "ok", int(len(benchmark))
