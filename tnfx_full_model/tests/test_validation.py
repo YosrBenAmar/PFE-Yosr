@@ -117,3 +117,177 @@ def test_new_validation_checks_present(config):
         "negative_he_diagnostics_table_present",
     }:
         assert expected in names
+
+
+def test_recommendation_validation_checks(config):
+    tables = {
+        "Stage_2_Decisions": pd.DataFrame([{
+            "profile_id": 1, "family": "importer", "currency": "EUR", "currency_pair": "EUR_TND",
+            "tenor_months": 6, "timing_cv_scenario": "baseline", "direction": "outflow",
+            "h_c": 0.5, "lambda": 0.8, "hedge_intensity_scenario": "baseline_protection",
+            "pricing_side": "ask", "stage2_row_status": "material", "HE_t": 0.1,
+            "variance_unhedged": 1.0, "variance_hedged": 0.9, "h_star": 0.5,
+            "expected_cost": 0.01, "E_t": -0.2,
+        }]),
+        "Market_Data_Snapshot": pd.DataFrame([{
+            "currency_pair": "EUR_TND", "tenor_months": 6, "tenor_days": 180,
+            "spot_ask": 3.39, "tnd_rate_ask": 0.08, "fcy_rate_bid": 0.03, "F_CIP_ask": 3.39,
+            "realized_future_spot_bid": 3.4,
+        }]),
+        "Backtest_Results": pd.DataFrame([{"status": "backtest_completed"}]),
+        "Hedge_Decision_Recommendations": pd.DataFrame([{
+            "profile_id": 1, "family": "importer", "currency": "EUR", "currency_pair": "EUR_TND",
+            "tenor_months": 6, "timing_cv_scenario": "baseline", "direction": "outflow",
+            "E_t": -0.2, "abs_exposure": 0.2, "lambda": 0.8,
+            "selected_hedge_intensity_scenario": "baseline_protection",
+            "recommended_hedge_ratio": 0.5, "recommended_hedged_amount": 0.1,
+            "expected_cost": 0.01, "mean_HE_t": 0.1, "hit_ratio": 0.6,
+            "mean_hedged_pnl_per_unit": 0.01, "recommendation_reason": "ok",
+            "recommendation_source": "strategy_ranking",
+        }]),
+    }
+    checks = validate_stage2(tables, config.market)
+    names = set(checks["check_name"])
+    for expected in {
+        "hedge_decision_recommendations_exists",
+        "hedge_recommendations_unique_exposure_key",
+        "selected_hedge_intensity_scenario_not_null",
+        "recommended_hedge_ratio_within_zero_lambda",
+        "recommended_hedged_amount_matches_ratio_times_abs_exposure",
+        "recommendation_reason_not_empty",
+    }:
+        assert expected in names
+
+
+def test_gamma_methodology_validation_checks_present(config):
+    tables = {
+        "Stage_2_Decisions": pd.DataFrame([{
+            "profile_id": 1, "family": "importer", "currency": "EUR", "currency_pair": "EUR_TND",
+            "tenor_months": 6, "timing_cv_scenario": "baseline", "direction": "outflow",
+            "h_c": 0.4, "lambda": 0.8, "hedge_intensity_scenario": "baseline_protection",
+            "pricing_side": "ask", "stage2_row_status": "material", "HE_t": 0.1,
+            "variance_unhedged": 1.0, "variance_hedged": 0.9, "h_star": 0.4,
+            "expected_cost": 0.01, "E_t": -0.2,
+        }]),
+        "Market_Data_Snapshot": pd.DataFrame([{
+            "currency_pair": "EUR_TND", "tenor_months": 6, "tenor_days": 180,
+            "spot_ask": 3.39, "tnd_rate_ask": 0.08, "fcy_rate_bid": 0.03, "F_CIP_ask": 3.39,
+            "realized_future_spot_bid": 3.4,
+        }]),
+        "Backtest_Results": pd.DataFrame([{"status": "backtest_completed"}]),
+        "Hedge_Decision_Recommendations": pd.DataFrame([{
+            "profile_id": 1, "family": "importer", "currency": "EUR", "currency_pair": "EUR_TND",
+            "tenor_months": 6, "timing_cv_scenario": "baseline", "direction": "outflow",
+            "E_t": -0.2, "abs_exposure": 0.2, "lambda": 0.8,
+            "selected_hedge_intensity_scenario": "baseline_protection",
+            "recommended_hedge_ratio": 0.4, "recommended_hedged_amount": 0.08,
+            "expected_cost": 0.01, "mean_HE_t": 0.1, "hit_ratio": 0.6,
+            "mean_hedged_pnl_per_unit": 0.01, "recommendation_reason": "ok",
+            "recommendation_source": "strategy_ranking",
+        }]),
+        "Gamma_R_Calibration_Global": pd.DataFrame([{
+            "hedge_intensity_scenario": "baseline_protection",
+            "target_intensity": 0.5,
+            "benchmark_family_used": "importer",
+            "benchmark_currency_used": "EUR",
+            "benchmark_exposure_definition": "median_abs_delta_net_EUR_importer",
+            "E_star": 0.05,
+            "rho_star": 0.1,
+            "sigma_Q_star": 0.2,
+            "currency_pair": "EUR_TND",
+            "tenor_months": 6,
+            "S0_star": 3.4,
+            "sigma_E_star": 0.08,
+            "carry_cost_star": 0.06,
+            "gamma_R": 0.01,
+            "calibration_status": "ok",
+            "gamma_methodology": "global_population_importer_benchmark",
+        }]),
+        "Gamma_R_Calibration_By_Split": pd.DataFrame([{
+            "split_id": "wf_001",
+            "train_end": "2013-12-31",
+            "test_start": "2014-01-01",
+            "hedge_intensity_scenario": "baseline_protection",
+            "calibration_status": "ok",
+            "gamma_methodology": "split_specific_market_side",
+            "benchmark_exposure_definition": "fixed_unit_exposure",
+        }]),
+    }
+    checks = validate_stage2(tables, config.market)
+    names = set(checks["check_name"])
+    for expected in {
+        "gamma_r_calibration_global_exists",
+        "gamma_r_calibration_global_required_columns_present",
+        "gamma_r_global_positive_estar_for_active_ok_rows",
+        "gamma_r_global_has_methodology_labels",
+        "gamma_split_methodology_disclosed_or_status_present",
+        "no_false_client_specific_gamma_claims",
+    }:
+        assert expected in names
+
+
+def test_output_manifest_validation_checks_present(config):
+    tables = {
+        "Stage_2_Decisions": pd.DataFrame([{
+            "profile_id": 1, "family": "importer", "currency": "EUR", "currency_pair": "EUR_TND",
+            "tenor_months": 6, "timing_cv_scenario": "baseline", "direction": "outflow",
+            "h_c": 0.4, "lambda": 0.8, "hedge_intensity_scenario": "baseline_protection",
+            "pricing_side": "ask", "stage2_row_status": "material", "HE_t": 0.1,
+            "variance_unhedged": 1.0, "variance_hedged": 0.9, "h_star": 0.4,
+            "expected_cost": 0.01, "E_t": -0.2,
+        }]),
+        "Market_Data_Snapshot": pd.DataFrame([{
+            "currency_pair": "EUR_TND", "tenor_months": 6, "tenor_days": 180,
+            "spot_ask": 3.39, "tnd_rate_ask": 0.08, "fcy_rate_bid": 0.03, "F_CIP_ask": 3.39,
+            "realized_future_spot_bid": 3.4,
+        }]),
+        "Backtest_Results": pd.DataFrame([{"status": "backtest_completed"}]),
+        "Hedge_Decision_Recommendations": pd.DataFrame([{
+            "profile_id": 1, "family": "importer", "currency": "EUR", "currency_pair": "EUR_TND",
+            "tenor_months": 6, "timing_cv_scenario": "baseline", "direction": "outflow",
+            "E_t": -0.2, "abs_exposure": 0.2, "lambda": 0.8,
+            "selected_hedge_intensity_scenario": "baseline_protection",
+            "recommended_hedge_ratio": 0.4, "recommended_hedged_amount": 0.08,
+            "expected_cost": 0.01, "mean_HE_t": 0.1, "hit_ratio": 0.6,
+            "mean_hedged_pnl_per_unit": 0.01, "recommendation_reason": "ok",
+            "recommendation_source": "strategy_ranking",
+        }]),
+        "Output_Manifest": pd.DataFrame([{
+            "run_id": "x",
+            "table_name": "Stage_2_Decisions",
+            "file_name": "Stage_2_Decisions.csv",
+            "file_path": "data/outputs/latest/Stage_2_Decisions.csv",
+            "n_rows": 1,
+            "n_columns": 5,
+            "export_status": "exported",
+            "export_timestamp": "2026-05-21T10:00:00",
+            "error_message": "",
+        }]),
+        "Gamma_R_Calibration_Global": pd.DataFrame([{
+            "hedge_intensity_scenario": "baseline_protection",
+            "target_intensity": 0.5,
+            "benchmark_family_used": "importer",
+            "benchmark_currency_used": "EUR",
+            "benchmark_exposure_definition": "median_abs_delta_net_EUR_importer",
+            "E_star": 0.05,
+            "rho_star": 0.1,
+            "sigma_Q_star": 0.2,
+            "currency_pair": "EUR_TND",
+            "tenor_months": 6,
+            "S0_star": 3.4,
+            "sigma_E_star": 0.08,
+            "carry_cost_star": 0.06,
+            "gamma_R": 0.01,
+            "calibration_status": "ok",
+            "gamma_methodology": "global_population_importer_benchmark",
+        }]),
+    }
+    checks = validate_stage2(tables, config.market)
+    names = set(checks["check_name"])
+    for expected in {
+        "output_manifest_exists",
+        "output_manifest_required_columns_present",
+        "output_manifest_nonempty_when_csv_export_enabled",
+        "output_manifest_failed_exports_explicitly_reported",
+    }:
+        assert expected in names

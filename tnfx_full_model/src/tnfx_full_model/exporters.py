@@ -17,6 +17,7 @@ SHEET_ORDER = [
     "Tenor_Weights_Preview", "Stage_1_5_Handoff", "Stage_1_5_Handoff_Preview",
     "Macro_Anchor_Check", "Rejection_Log", "Sobol_Acceptance", "Sobol_Meta",
     "Sign_Threshold_Sensitivity", "Regime_State_Priors", "Market_Load_Metadata",
+    "Gamma_R_Calibration_Global",
     "Forward_Backtest_Long", "Rolling_Market_Performance", "Split_OOS_Performance",
     "Train_Test_Splits", "Gamma_R_Calibration_By_Split", "Out_Of_Sample_Backtest",
     "Backtest_By_Split", "Regime_Train_Test_Splits", "Gamma_R_Calibration_By_Regime_Split",
@@ -25,8 +26,13 @@ SHEET_ORDER = [
     "Market_Data_Snapshot", "Stage_2_Decisions", "Stage_2_Decisions_Preview",
     "Backtest_Results", "Sensitivity_Summary", "Aggregate_Hedge_Profile",
     "Cohort_Analysis", "Rolling_Market_Summary", "Regime_Performance",
-    "Strategy_Ranking", "Negative_HE_Diagnostics", "Profile_Cohort_Attribution",
+    "Strategy_Ranking", "Hedge_Decision_Recommendations", "Negative_HE_Diagnostics", "Profile_Cohort_Attribution",
     "Validation_Checks",
+]
+
+MANIFEST_COLUMNS = [
+    "run_id", "table_name", "file_name", "file_path", "n_rows", "n_columns",
+    "export_status", "export_timestamp", "error_message",
 ]
 
 
@@ -317,6 +323,7 @@ def export_tables(
     if "Methodology_Status" not in tables_local:
         tables_local["Methodology_Status"] = _ensure_run_id_column(_methodology_status(tables_local, config.run), run_id)
     manifest_rows = []
+    manifest_timestamp = datetime.now().isoformat(timespec="seconds")
     if export_csv:
         for name, df in tables_local.items():
             if not isinstance(df, pd.DataFrame):
@@ -351,9 +358,39 @@ def export_tables(
                 "n_rows": int(len(df)),
                 "n_columns": int(len(df.columns)),
                 "export_status": status,
-                "export_timestamp": datetime.now().isoformat(timespec="seconds"),
+                "export_timestamp": manifest_timestamp,
                 "error_message": error_message,
             })
+    existing_manifest = tables_local.get("Output_Manifest", pd.DataFrame())
+    if manifest_rows:
+        manifest_df = pd.DataFrame(manifest_rows, columns=MANIFEST_COLUMNS)
+    elif isinstance(existing_manifest, pd.DataFrame) and not existing_manifest.empty:
+        manifest_df = existing_manifest.copy()
+        for col in MANIFEST_COLUMNS:
+            if col not in manifest_df.columns:
+                manifest_df[col] = ""
+        manifest_df = manifest_df[MANIFEST_COLUMNS]
+    else:
+        workbook_manifest_rows = []
+        for name, df in tables_local.items():
+            if not isinstance(df, pd.DataFrame):
+                continue
+            workbook_manifest_rows.append({
+                "run_id": run_id or "",
+                "table_name": name,
+                "file_name": "",
+                "file_path": "",
+                "n_rows": int(len(df)),
+                "n_columns": int(len(df.columns)),
+                "export_status": "not_exported_in_this_pass",
+                "export_timestamp": manifest_timestamp,
+                "error_message": "",
+            })
+        manifest_df = pd.DataFrame(workbook_manifest_rows, columns=MANIFEST_COLUMNS) if workbook_manifest_rows else pd.DataFrame(columns=MANIFEST_COLUMNS)
+    manifest_df = _ensure_run_id_column(manifest_df, run_id)
+    if "run_id" in manifest_df.columns and run_id is not None:
+        manifest_df["run_id"] = manifest_df["run_id"].replace("", run_id).fillna(run_id)
+    tables["Output_Manifest"] = manifest_df.copy()
     excel_tables = dict(tables_local)
     excel_tables["Config_Summary"] = _ensure_run_id_column(config_summary(config, run_id), run_id)
     large_preview_map = {
@@ -371,12 +408,9 @@ def export_tables(
                 excel_tables[name] = excel_tables[preview_name].head(max_rows)
             else:
                 excel_tables[name] = _stratified_preview(df, max_rows)
-    if manifest_rows:
-        excel_tables["Output_Manifest"] = pd.DataFrame(manifest_rows)
-        if export_csv:
-            excel_tables["Output_Manifest"].to_csv(out_dir / "Output_Manifest.csv", index=False)
-    else:
-        excel_tables["Output_Manifest"] = pd.DataFrame(columns=["run_id", "table_name", "file_name", "file_path", "n_rows", "n_columns", "export_status", "export_timestamp", "error_message"])
+    excel_tables["Output_Manifest"] = manifest_df
+    if export_csv:
+        excel_tables["Output_Manifest"].to_csv(out_dir / "Output_Manifest.csv", index=False)
     excel_tables["README_Run"] = _ensure_run_id_column(readme_run(config, truncated, stage, tables_local, run_id), run_id)
 
     def _write_excel(target: Path) -> None:

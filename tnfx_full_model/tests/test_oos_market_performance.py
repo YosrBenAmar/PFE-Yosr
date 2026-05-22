@@ -62,3 +62,40 @@ def test_first_split_is_2008_2013_to_2014():
     assert pd.to_datetime(first["train_start"]).strftime("%Y-%m-%d") == "2008-01-01"
     assert pd.to_datetime(first["train_end"]).strftime("%Y-%m-%d") == "2013-12-31"
     assert pd.to_datetime(first["test_start"]).strftime("%Y-%m-%d") == "2014-01-01"
+
+
+def test_oos_gamma_table_has_methodology_disclosure():
+    _, cal = compute_oos_market_performance(
+        forward_backtest_long=_synthetic_forward(),
+        spot_history_long=_synthetic_history(),
+        accepted_profiles=_accepted(),
+        hedge_scenarios={"no_hedge": 0.0, "low_protection": 0.25, "baseline_protection": 0.5, "high_protection": 0.75, "full_hedge": 1.0},
+        stress_scenarios={"cip_base": 0, "cip_plus_50bps": 50},
+        vol_window_days=30,
+        run_id="x",
+    )
+    required = {
+        "gamma_methodology",
+        "benchmark_exposure_definition",
+        "calibration_currency_pair",
+        "calibration_tenor_months",
+        "n_training_observations",
+        "calibration_status",
+    }
+    assert required.issubset(set(cal.columns))
+
+
+def test_oos_gamma_table_labels_market_side_fixed_unit_exposure():
+    _, cal = compute_oos_market_performance(
+        forward_backtest_long=_synthetic_forward(),
+        spot_history_long=_synthetic_history(),
+        accepted_profiles=_accepted(),
+        hedge_scenarios={"no_hedge": 0.0, "low_protection": 0.25, "baseline_protection": 0.5, "high_protection": 0.75, "full_hedge": 1.0},
+        stress_scenarios={"cip_base": 0, "cip_plus_50bps": 50},
+        vol_window_days=30,
+        run_id="x",
+    )
+    active = cal[cal["hedge_intensity_scenario"].isin(["low_protection", "baseline_protection", "high_protection"])]
+    assert not active.empty
+    assert active["gamma_methodology"].eq("split_specific_market_side").all()
+    assert active["benchmark_exposure_definition"].eq("fixed_unit_exposure").all()

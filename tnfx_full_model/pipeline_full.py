@@ -23,7 +23,13 @@ from tnfx_full_model.gamma_calibration import calibrate_gamma_R
 from tnfx_full_model.hedge_engine import aggregate_hedge_profile, cohort_analysis, compute_hedge_decisions
 from tnfx_full_model.market_data import load_market_inputs
 from tnfx_full_model.rolling_market_performance import compute_oos_market_performance, compute_rolling_market_performance, set_regime_breaks
-from tnfx_full_model.rolling_summaries import compute_negative_he_diagnostics, compute_regime_performance, compute_rolling_market_summary, compute_strategy_ranking
+from tnfx_full_model.rolling_summaries import (
+    compute_hedge_decision_recommendations,
+    compute_negative_he_diagnostics,
+    compute_regime_performance,
+    compute_rolling_market_summary,
+    compute_strategy_ranking,
+)
 from tnfx_full_model.sensitivity import sensitivity_summary
 from tnfx_full_model.train_test_split import (
     build_full_walk_forward_splits,
@@ -111,6 +117,7 @@ def run_full(
         tables["Accepted_Profiles"], tables["BM_Exposure_Diagnostics"], snapshot,
         config.market["hedge_intensity_scenarios"],
     )
+    tables["Gamma_R_Calibration_Global"] = gamma_detail
     decisions = compute_hedge_decisions(
         tables["Stage_1_5_Handoff"], snapshot, valuation_date,
         config.market["hedge_intensity_scenarios"], gamma_R,
@@ -317,6 +324,10 @@ def run_full(
         tables["Regime_Performance"] = compute_regime_performance(rolling_market)
         tables["Strategy_Ranking"] = compute_strategy_ranking(rolling_market)
         tables["Negative_HE_Diagnostics"] = compute_negative_he_diagnostics(rolling_market)
+    tables["Hedge_Decision_Recommendations"] = compute_hedge_decision_recommendations(
+        tables.get("Stage_2_Decisions", pd.DataFrame()),
+        tables.get("Strategy_Ranking", pd.DataFrame()),
+    )
     tables = enrich_reporting_tables(tables, config)
     ckpt("pre-validation")
     validation_market = dict(config.market)
@@ -338,9 +349,11 @@ def run_full(
             "Backtest_Results",
             "Validation_Checks",
             "Market_Data_Snapshot",
+            "Gamma_R_Calibration_Global",
             "Rolling_Market_Summary",
             "Regime_Performance",
             "Strategy_Ranking",
+            "Hedge_Decision_Recommendations",
             "Aggregate_Hedge_Profile",
             "Cohort_Analysis",
             "Family_Profile_Summary",

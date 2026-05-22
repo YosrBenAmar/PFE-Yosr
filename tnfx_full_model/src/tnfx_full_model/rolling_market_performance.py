@@ -232,6 +232,15 @@ def compute_rolling_market_performance(
 
 
 def _calibrate_split_gamma(benchmark: pd.DataFrame, target_intensity: float) -> tuple[float, str, int]:
+    """
+    Calibrate gamma_R for the rolling h_star formula:
+        h_star = 1 + rho*sigma_Q/sigma - gamma * carry / (2 * sigma^2 * spot)
+    
+    Solving h_star = target for gamma:
+        gamma = (1 + rho*sigma_Q/sigma - target) * 2 * sigma^2 * spot / carry
+    
+    This formula has no E term because _vectorized_h_star does not use E.
+    """
     if benchmark.empty:
         return np.nan, "calibration_failed", 0
     med_sigma = float(pd.to_numeric(benchmark["sigma_E"], errors="coerce").median())
@@ -242,7 +251,13 @@ def _calibrate_split_gamma(benchmark: pd.DataFrame, target_intensity: float) -> 
     if med_sigma <= 0 or med_s0 <= 0 or med_carry <= 0:
         return np.nan, "calibration_failed_bad_inputs", int(len(benchmark))
     try:
-        gamma = solve_gamma_for_target(target_intensity, 1.0, med_sigma, rho, sigma_q, med_s0, med_carry)
+        # Direct closed-form inversion of _vectorized_h_star at target
+        numerator = (1.0 + rho * sigma_q / med_sigma - target_intensity) * 2.0 * med_sigma**2 * med_s0
+        if abs(med_carry) < 1e-12:
+            return np.nan, "calibration_failed_zero_carry", int(len(benchmark))
+        gamma = numerator / med_carry
+        if gamma <= 0:
+            return np.nan, "calibration_failed_nonpositive", int(len(benchmark))
         return float(gamma), "ok", int(len(benchmark))
     except Exception:
         return np.nan, "calibration_failed", int(len(benchmark))
@@ -292,6 +307,8 @@ def compute_oos_market_performance(
                 "target_intensity": target,
                 "gamma_R": gamma,
                 "calibration_status": status,
+                "gamma_methodology": "split_specific_market_side",
+                "benchmark_exposure_definition": "fixed_unit_exposure",
                 "n_training_observations": n_train,
                 "calibration_currency_pair": "EUR_TND",
                 "calibration_tenor_months": 6,

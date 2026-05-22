@@ -253,6 +253,78 @@ def validate_stage2(tables: dict, market_config: dict, output_dir: Path | None =
     imm_bad = imm[(imm["h_c"] != 0) | (imm["h_star"] != 0)]
     checks.append(_check(cid, "Stage 2", "immaterial_rows_have_zero_hc", imm_bad.empty, "hard", len(imm_bad), imm_bad.head().to_dict("records"))); cid += 1
 
+    gamma_global = tables.get("Gamma_R_Calibration_Global", pd.DataFrame())
+    gamma_global_exists = isinstance(gamma_global, pd.DataFrame) and not gamma_global.empty
+    checks.append(_check(cid, "Stage 2", "gamma_r_calibration_global_exists", gamma_global_exists, "hard", 0 if gamma_global_exists else 1)); cid += 1
+    gamma_global_required_cols = [
+        "hedge_intensity_scenario", "target_intensity", "benchmark_family_used", "benchmark_currency_used",
+        "benchmark_exposure_definition", "E_star", "rho_star", "sigma_Q_star", "currency_pair",
+        "tenor_months", "S0_star", "sigma_E_star", "carry_cost_star", "gamma_R", "calibration_status",
+        "gamma_methodology",
+    ]
+    if gamma_global_exists:
+        missing_global_cols = [c for c in gamma_global_required_cols if c not in gamma_global.columns]
+        checks.append(_check(cid, "Stage 2", "gamma_r_calibration_global_required_columns_present", not missing_global_cols, "hard", len(missing_global_cols), missing_global_cols)); cid += 1
+        if not missing_global_cols:
+            gg = gamma_global.copy()
+            gg["target_intensity"] = pd.to_numeric(gg["target_intensity"], errors="coerce")
+            gg["E_star"] = pd.to_numeric(gg["E_star"], errors="coerce")
+            active_ok = gg[
+                gg["target_intensity"].notna()
+                & (~gg["target_intensity"].isin([0.0, 1.0]))
+                & gg["calibration_status"].astype(str).eq("ok")
+            ]
+            bad_estar = active_ok[active_ok["E_star"].isna() | (active_ok["E_star"] <= 0)]
+            checks.append(_check(cid, "Stage 2", "gamma_r_global_positive_estar_for_active_ok_rows", bad_estar.empty, "hard", len(bad_estar), bad_estar.head().to_dict("records"))); cid += 1
+            bad_method = gg["gamma_methodology"].isna() | gg["gamma_methodology"].astype(str).str.strip().eq("")
+            checks.append(_check(cid, "Stage 2", "gamma_r_global_has_methodology_labels", not bad_method.any(), "hard", int(bad_method.sum()), gg[bad_method].head().to_dict("records"))); cid += 1
+    else:
+        checks.append(_check(cid, "Stage 2", "gamma_r_calibration_global_required_columns_present", False, "hard", 1, "missing_table")); cid += 1
+        checks.append(_check(cid, "Stage 2", "gamma_r_global_positive_estar_for_active_ok_rows", False, "hard", 1, "missing_table")); cid += 1
+        checks.append(_check(cid, "Stage 2", "gamma_r_global_has_methodology_labels", False, "hard", 1, "missing_table")); cid += 1
+
+    recs = tables.get("Hedge_Decision_Recommendations", pd.DataFrame())
+    rec_exists = isinstance(recs, pd.DataFrame) and not recs.empty
+    checks.append(_check(cid, "Stage 2", "hedge_decision_recommendations_exists", rec_exists, "hard", 0 if rec_exists else 1)); cid += 1
+    if rec_exists:
+        rec = recs.copy()
+        req_cols = [
+            "profile_id", "currency_pair", "tenor_months", "timing_cv_scenario", "direction",
+            "selected_hedge_intensity_scenario", "recommended_hedge_ratio",
+            "recommended_hedged_amount", "lambda", "E_t", "recommendation_reason",
+        ]
+        missing_rec_cols = [c for c in req_cols if c not in rec.columns]
+        checks.append(_check(cid, "Stage 2", "hedge_decision_recommendations_required_columns_present", not missing_rec_cols, "hard", len(missing_rec_cols), missing_rec_cols)); cid += 1
+        if not missing_rec_cols:
+            key_cols = ["profile_id", "currency_pair", "tenor_months", "timing_cv_scenario", "direction"]
+            dup = rec[rec.duplicated(key_cols, keep=False)]
+            checks.append(_check(cid, "Stage 2", "hedge_recommendations_unique_exposure_key", dup.empty, "hard", len(dup), dup.head().to_dict("records"))); cid += 1
+            scen_missing = rec["selected_hedge_intensity_scenario"].isna() | rec["selected_hedge_intensity_scenario"].astype(str).str.strip().eq("")
+            checks.append(_check(cid, "Stage 2", "selected_hedge_intensity_scenario_not_null", not scen_missing.any(), "hard", int(scen_missing.sum()), rec[scen_missing].head().to_dict("records"))); cid += 1
+            rec["recommended_hedge_ratio"] = pd.to_numeric(rec["recommended_hedge_ratio"], errors="coerce")
+            rec["lambda"] = pd.to_numeric(rec["lambda"], errors="coerce")
+            rec["recommended_hedged_amount"] = pd.to_numeric(rec["recommended_hedged_amount"], errors="coerce")
+            rec["E_t"] = pd.to_numeric(rec["E_t"], errors="coerce")
+            bad_ratio = rec[
+                rec["recommended_hedge_ratio"].isna()
+                | rec["lambda"].isna()
+                | (rec["recommended_hedge_ratio"] < -1e-12)
+                | (rec["recommended_hedge_ratio"] - rec["lambda"] > 1e-12)
+            ]
+            checks.append(_check(cid, "Stage 2", "recommended_hedge_ratio_within_zero_lambda", bad_ratio.empty, "hard", len(bad_ratio), bad_ratio.head().to_dict("records"))); cid += 1
+            amount_expected = rec["recommended_hedge_ratio"] * rec["E_t"].abs()
+            bad_amount = rec[(rec["recommended_hedged_amount"] - amount_expected).abs() > 1e-8]
+            checks.append(_check(cid, "Stage 2", "recommended_hedged_amount_matches_ratio_times_abs_exposure", bad_amount.empty, "hard", len(bad_amount), bad_amount.head().to_dict("records"))); cid += 1
+            bad_reason = rec["recommendation_reason"].isna() | rec["recommendation_reason"].astype(str).str.strip().eq("")
+            checks.append(_check(cid, "Stage 2", "recommendation_reason_not_empty", not bad_reason.any(), "hard", int(bad_reason.sum()), rec[bad_reason].head().to_dict("records"))); cid += 1
+    else:
+        checks.append(_check(cid, "Stage 2", "hedge_decision_recommendations_required_columns_present", False, "hard", 1, "missing_table")); cid += 1
+        checks.append(_check(cid, "Stage 2", "hedge_recommendations_unique_exposure_key", False, "hard", 1, "missing_table")); cid += 1
+        checks.append(_check(cid, "Stage 2", "selected_hedge_intensity_scenario_not_null", False, "hard", 1, "missing_table")); cid += 1
+        checks.append(_check(cid, "Stage 2", "recommended_hedge_ratio_within_zero_lambda", False, "hard", 1, "missing_table")); cid += 1
+        checks.append(_check(cid, "Stage 2", "recommended_hedged_amount_matches_ratio_times_abs_exposure", False, "hard", 1, "missing_table")); cid += 1
+        checks.append(_check(cid, "Stage 2", "recommendation_reason_not_empty", False, "hard", 1, "missing_table")); cid += 1
+
     preview = tables.get("Stage_2_Decisions_Preview", pd.DataFrame())
     checks.append(
         _check(
@@ -328,6 +400,38 @@ def validate_stage2(tables: dict, market_config: dict, output_dir: Path | None =
         true_oos_status = "implemented" if has_flag and bool(oos["split_specific_gamma_used"].eq(True).any()) else "not_implemented"
         checks.append(_check(cid, "Backtest", "true_oos_backtest_status_recorded", True, "info", 0, true_oos_status)); cid += 1
     gamma_split = tables.get("Gamma_R_Calibration_By_Split", pd.DataFrame())
+    if debug_skip_optional:
+        checks.append(_check(cid, "Backtest", "gamma_split_methodology_disclosed_or_status_present", True, "info", 0, "", "skipped_for_debug")); cid += 1
+        checks.append(_check(cid, "Backtest", "no_false_client_specific_gamma_claims", True, "info", 0, "", "skipped_for_debug")); cid += 1
+    elif isinstance(gamma_split, pd.DataFrame) and not gamma_split.empty:
+        has_method_col = "gamma_methodology" in gamma_split.columns
+        has_status_col = "calibration_status" in gamma_split.columns
+        status_clear = has_status_col and gamma_split["calibration_status"].astype(str).str.strip().ne("").all()
+        checks.append(_check(
+            cid,
+            "Backtest",
+            "gamma_split_methodology_disclosed_or_status_present",
+            has_method_col or status_clear,
+            "hard",
+            0 if (has_method_col or status_clear) else 1,
+            {"has_gamma_methodology": has_method_col, "has_calibration_status": has_status_col, "status_clear": status_clear},
+        )); cid += 1
+        methodology_labels = []
+        if has_method_col:
+            methodology_labels.extend(gamma_split["gamma_methodology"].dropna().astype(str).tolist())
+        if isinstance(split_oos, pd.DataFrame) and not split_oos.empty and "gamma_methodology" in split_oos.columns:
+            methodology_labels.extend(split_oos["gamma_methodology"].dropna().astype(str).tolist())
+        has_client_specific_claim = any("client_specific" in m.lower() for m in methodology_labels)
+        checks.append(_check(
+            cid,
+            "Backtest",
+            "no_false_client_specific_gamma_claims",
+            not has_client_specific_claim,
+            "hard",
+            int(has_client_specific_claim),
+            methodology_labels[:10],
+            "Split/OOS gamma calibration must be labeled market-side unless profile-level exposure is used.",
+        )); cid += 1
     if isinstance(gamma_split, pd.DataFrame) and not gamma_split.empty and "calibration_status" in gamma_split.columns:
         has_ok = gamma_split["calibration_status"].astype(str).str.startswith("ok").any()
         if has_ok and not debug_skip_optional:
@@ -342,6 +446,33 @@ def validate_stage2(tables: dict, market_config: dict, output_dir: Path | None =
         same_run = manifest["run_id"].nunique(dropna=True) == 1
     checks.append(_check(cid, "Output", "all_outputs_share_same_run_id", same_run, "hard", 0 if same_run else 1)); cid += 1
     checks.append(_check(cid, "Output", "output_manifest_exists", not manifest.empty or (output_dir is not None and (Path(output_dir) / "Output_Manifest.csv").exists()), "hard")); cid += 1
+    manifest_required_cols = [
+        "run_id", "table_name", "file_name", "file_path", "n_rows", "n_columns",
+        "export_status", "export_timestamp", "error_message",
+    ]
+    manifest_has_cols = isinstance(manifest, pd.DataFrame) and set(manifest_required_cols).issubset(set(manifest.columns))
+    missing_manifest_cols = [] if manifest_has_cols else [c for c in manifest_required_cols if not isinstance(manifest, pd.DataFrame) or c not in manifest.columns]
+    checks.append(_check(cid, "Output", "output_manifest_required_columns_present", manifest_has_cols, "hard", len(missing_manifest_cols), missing_manifest_cols)); cid += 1
+    if export_csv:
+        checks.append(_check(cid, "Output", "output_manifest_nonempty_when_csv_export_enabled", isinstance(manifest, pd.DataFrame) and not manifest.empty, "hard", 0 if (isinstance(manifest, pd.DataFrame) and not manifest.empty) else 1)); cid += 1
+    else:
+        checks.append(_check(cid, "Output", "output_manifest_nonempty_when_csv_export_enabled", True, "info", 0, "", "checked only when export_csv=true")); cid += 1
+    if manifest_has_cols and isinstance(manifest, pd.DataFrame) and not manifest.empty:
+        failed_rows = manifest[manifest["export_status"].astype(str).str.lower().eq("failed")]
+        unreported = failed_rows[
+            failed_rows["error_message"].isna() | failed_rows["error_message"].astype(str).str.strip().eq("")
+        ]
+        checks.append(_check(
+            cid,
+            "Output",
+            "output_manifest_failed_exports_explicitly_reported",
+            unreported.empty,
+            "hard",
+            len(unreported),
+            unreported.head().to_dict("records"),
+        )); cid += 1
+    else:
+        checks.append(_check(cid, "Output", "output_manifest_failed_exports_explicitly_reported", True, "info", 0, "", "manifest missing/empty")); cid += 1
 
     if output_dir is not None and export_csv:
         out = Path(output_dir)

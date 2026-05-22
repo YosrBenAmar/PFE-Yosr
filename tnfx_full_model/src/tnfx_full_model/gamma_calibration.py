@@ -24,11 +24,19 @@ def solve_gamma_for_target(target: float, E: float, sigma_E: float, rho: float, 
 
 def calibrate_gamma_R(accepted: pd.DataFrame, diagnostics: pd.DataFrame, market_snapshot: pd.DataFrame, targets: dict[str, float]) -> tuple[dict[str, float], pd.DataFrame]:
     diag = diagnostics.set_index("profile_id")
-    importer_mask = diag["family"] == "importer"
-    if importer_mask.any():
+    importer_mask = diag["family"] == "importer" if "family" in diag.columns else pd.Series(dtype=bool)
+    if "delta_net_EUR" in diag.columns and importer_mask.any():
         E = float(diag.loc[importer_mask, "delta_net_EUR"].abs().median())
-    else:
+        benchmark_family_used = "importer"
+        benchmark_exposure_definition = "median_abs_delta_net_EUR_importer"
+    elif "delta_net_EUR" in diag.columns:
         E = float(diag["delta_net_EUR"].abs().median())
+        benchmark_family_used = "all_families"
+        benchmark_exposure_definition = "median_abs_delta_net_EUR_all_families"
+    else:
+        E = np.nan
+        benchmark_family_used = "all_families"
+        benchmark_exposure_definition = "delta_net_EUR_missing"
     rho = float(accepted["rho"].median())
     sigma_Q = float(accepted["sigma_Q"].median())
     bench_keys = [("EUR_TND", 6), ("USD_TND", 6), ("EUR_TND", 12)]
@@ -45,24 +53,43 @@ def calibrate_gamma_R(accepted: pd.DataFrame, diagnostics: pd.DataFrame, market_
             r = row.iloc[0]
             carry_cost = float(r["carry_cost"])
             forward_bias_placeholder = 0.0
-            if carry_cost + forward_bias_placeholder <= 0:
+            s0_star = float(r.get("spot_ask", r["spot_mid"]))
+            sigma_e_star = float(r["sigma_E"])
+            gamma = np.nan
+            status = "ok"
+            if not np.isfinite(E) or E <= 0:
+                status = "invalid_benchmark_exposure"
+            elif carry_cost + forward_bias_placeholder <= 0:
                 status = "negative_carry_cost_skipped"
-                details.append({"hedge_intensity_scenario": scenario, "target_intensity": tau, "currency_pair": pair,
-                                "tenor_months": tenor, "gamma_R": np.nan, "status": status})
-                continue
-            try:
-                # Use spot_ask for calibration benchmark: importer outflows execute at ASK.
-                # Falls back to spot_mid for backward compatibility if ASK not present.
-                gamma = solve_gamma_for_target(
-                    tau, E, float(r["sigma_E"]), rho, sigma_Q, float(r.get("spot_ask", r["spot_mid"])), carry_cost
-                )
-                gammas.append(gamma)
-                status = "ok"
-            except ValueError as exc:
-                gamma = np.nan
-                status = str(exc)
-            details.append({"hedge_intensity_scenario": scenario, "target_intensity": tau, "currency_pair": pair,
-                            "tenor_months": tenor, "gamma_R": gamma, "status": status})
+            else:
+                try:
+                    # Use spot_ask for calibration benchmark: importer outflows execute at ASK.
+                    # Falls back to spot_mid for backward compatibility if ASK not present.
+                    gamma = solve_gamma_for_target(
+                        tau, E, sigma_e_star, rho, sigma_Q, s0_star, carry_cost
+                    )
+                    gammas.append(gamma)
+                except ValueError as exc:
+                    status = str(exc)
+            details.append({
+                "hedge_intensity_scenario": scenario,
+                "target_intensity": tau,
+                "benchmark_family_used": benchmark_family_used,
+                "benchmark_currency_used": "EUR",
+                "benchmark_exposure_definition": benchmark_exposure_definition,
+                "E_star": E,
+                "rho_star": rho,
+                "sigma_Q_star": sigma_Q,
+                "currency_pair": pair,
+                "tenor_months": tenor,
+                "S0_star": s0_star,
+                "sigma_E_star": sigma_e_star,
+                "carry_cost_star": carry_cost,
+                "gamma_R": gamma,
+                "calibration_status": status,
+                "status": status,
+                "gamma_methodology": "global_population_importer_benchmark",
+            })
         valid = [g for g in gammas if np.isfinite(g) and g > 0]
         if not valid:
             calibrated[scenario] = 1.0
