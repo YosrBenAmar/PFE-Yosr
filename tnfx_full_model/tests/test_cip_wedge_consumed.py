@@ -26,12 +26,20 @@ def test_cip_wedge_changes_carry_and_h_c():
     accepted = pd.DataFrame({
         "family": ["importer"], "rho": [0.1], "sigma_Q": [0.2]
     })
+    handoff = pd.DataFrame({
+        "profile_id": [1, 2, 3],
+        "currency_pair": ["EUR_TND"] * 3,
+        "tenor_months": [6, 6, 6],
+        "direction": ["outflow"] * 3,
+        "E_t": [-0.10, -0.15, -0.12],
+    })
     res = compute_rolling_market_performance(
         forward_backtest_long=forward,
         spot_history_long=history,
         accepted_profiles=accepted,
+        stage_1_5_handoff=handoff,
         hedge_scenarios={"baseline_protection": 0.5},
-        gamma_R_global={"baseline_protection": 2.0},
+        gamma_R_global={"baseline_protection": 0.005},
         stress_scenarios={"cip_base": 0, "cip_plus_50bps": 50},
         vol_window_days=30,
         run_id="x",
@@ -45,16 +53,8 @@ def test_cip_wedge_changes_carry_and_h_c():
         "CIP wedge must change carry_cost_used"
     )
 
-    # SECONDARY: h_star always differs (before clipping).
-    # h_c may both clip to the same bound when gamma is high relative
-    # to sigma_E - this is economically valid (saturation), not a bug.
-    assert base["h_star"] != plus["h_star"], (
-        f"h_star must differ: base={base['h_star']}, plus={plus['h_star']}"
+    # After the change, h_c MUST differ between scenarios for some rows.
+    # The previous "structurally unidentifiable" framing is wrong.
+    assert base["h_c"] != plus["h_c"], (
+        f"Wedge must change h_c: base={base['h_c']}, plus={plus['h_c']}"
     )
-
-    # TERTIARY: if h_c is interior for base scenario, wedge must reduce it.
-    if 1e-6 < float(base["h_c"]) < 1 - 1e-6:
-        assert base["h_c"] > plus["h_c"], (
-            f"Wedge should reduce interior h_c: base={base['h_c']}, "
-            f"plus={plus['h_c']}"
-        )

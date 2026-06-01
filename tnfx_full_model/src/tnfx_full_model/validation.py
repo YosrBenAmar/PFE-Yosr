@@ -547,23 +547,12 @@ def validate_stage2(tables: dict, market_config: dict, output_dir: Path | None =
             merged = pd.concat([base_h, plus_h], axis=1).dropna()
             if not merged.empty:
                 diff_share = float((merged["base_h"] - merged["plus_h"]).abs().gt(1e-4).mean())
-                interior_share = float(
-                    rolling[(rolling["h_c"] > 1e-6) & (rolling["h_c"] < 1 - 1e-6)].shape[0]
-                    / max(len(rolling), 1)
-                )
-                saturated = interior_share < 0.01
-                wedge_note = (
-                    "CIP wedge sensitivity in h_c requires interior solutions. "
-                    f"Interior h_c share: {interior_share:.3f}. "
-                    + ("Population fully saturated at bounds; wedge transmission "
-                       "to h_c is structurally unidentifiable in this run. "
-                       "Carry cost transmission confirmed via carry_cost_used column."
-                       if saturated else
-                       f"diff_share={diff_share:.3f} (threshold 0.10).")
-                )
-                ok = saturated or diff_share >= 0.10
-                checks.append(_check(cid, "Stage 2", "cip_wedge_changes_h_c",
-                    ok, "warning", 0 if ok else 1, diff_share, wedge_note))
+                ok = diff_share >= 0.10
+                checks.append(_check(
+                    cid, "Stage 2", "cip_wedge_changes_h_c",
+                    ok, "hard", 0 if ok else 1, diff_share,
+                    f"diff_share={diff_share:.3f}; CIP wedge must change h_c for at least 10% of cells."
+                ))
                 cid += 1
         checks.append(_check(cid, "Stage 2", "negative_he_diagnostics_table_present", "Negative_HE_Diagnostics" in tables, "info", 0 if "Negative_HE_Diagnostics" in tables else 1)); cid += 1
 

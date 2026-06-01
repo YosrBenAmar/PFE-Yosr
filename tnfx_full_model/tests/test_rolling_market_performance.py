@@ -22,15 +22,23 @@ def _sample_inputs():
         "spot_mid": np.linspace(3.0, 3.4, 300),
     })
     accepted = pd.DataFrame({"family": ["importer", "exporter"], "rho": [0.1, 0.2], "sigma_Q": [0.2, 0.3]})
-    return forward, history, accepted
+    handoff = pd.DataFrame({
+        "profile_id": [1, 2, 3],
+        "currency_pair": ["EUR_TND"] * 3,
+        "tenor_months": [6, 6, 6],
+        "direction": ["outflow"] * 3,
+        "E_t": [-0.10, -0.15, -0.12],
+    })
+    return forward, history, accepted, handoff
 
 
 def test_rolling_market_performance_row_count():
-    forward, history, accepted = _sample_inputs()
+    forward, history, accepted, handoff = _sample_inputs()
     res = compute_rolling_market_performance(
         forward_backtest_long=forward,
         spot_history_long=history,
         accepted_profiles=accepted,
+        stage_1_5_handoff=handoff,
         hedge_scenarios={"no_hedge": 0.0, "low_protection": 0.25, "baseline_protection": 0.5, "high_protection": 0.75, "full_hedge": 1.0},
         gamma_R_global={"low_protection": 0.5, "baseline_protection": 0.5, "high_protection": 0.5},
         stress_scenarios={"cip_base": 0, "cip_plus_50bps": 50},
@@ -57,10 +65,18 @@ def test_rolling_market_performance_no_lookahead():
         "spot_mid": np.linspace(3.0, 3.4, len(pre_dates) + len(post_dates)),
     })
     accepted = pd.DataFrame({"family": ["importer"], "rho": [0.1], "sigma_Q": [0.2]})
+    handoff = pd.DataFrame({
+        "profile_id": [1, 2, 3],
+        "currency_pair": ["EUR_TND"] * 3,
+        "tenor_months": [6, 6, 6],
+        "direction": ["outflow"] * 3,
+        "E_t": [-0.10, -0.15, -0.12],
+    })
     res = compute_rolling_market_performance(
         forward_backtest_long=forward,
         spot_history_long=history,
         accepted_profiles=accepted,
+        stage_1_5_handoff=handoff,
         hedge_scenarios={"baseline_protection": 0.5},
         gamma_R_global={"baseline_protection": 0.5},
         stress_scenarios={"cip_base": 0},

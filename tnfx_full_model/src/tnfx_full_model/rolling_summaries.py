@@ -82,11 +82,18 @@ def compute_strategy_ranking(rolling_market_performance: pd.DataFrame) -> pd.Dat
     summary["downside_score_component"] = 0.60 * summary["worst_case_pnl_norm"] + 0.40 * (1.0 - summary["share_negative_HE_norm"])
     summary["volatility_penalty_component"] = summary["std_norm"]
     summary["pnl_score_component"] = 0.60 * summary["hit_ratio_norm"] + 0.40 * summary["mean_pnl_norm"]
+    # Re-weighted post-validation (see Section IV.7/IV.8 of the report).
+    # Original 0.50/0.30/-0.15/0.05 over-recommended full_hedge in real
+    # client data (446 of 446 cells in the Colombus validation).
+    SCORE_WEIGHT_PROTECTION = 0.35
+    SCORE_WEIGHT_DOWNSIDE   = 0.25
+    SCORE_WEIGHT_VOLATILITY = -0.15
+    SCORE_WEIGHT_PNL        = 0.25
     summary["corporate_hedging_score"] = (
-        0.50 * summary["protection_score_component"]
-        + 0.30 * summary["downside_score_component"]
-        - 0.15 * summary["volatility_penalty_component"]
-        + 0.05 * summary["pnl_score_component"]
+        SCORE_WEIGHT_PROTECTION * summary["protection_score_component"]
+        + SCORE_WEIGHT_DOWNSIDE   * summary["downside_score_component"]
+        + SCORE_WEIGHT_VOLATILITY * summary["volatility_penalty_component"]
+        + SCORE_WEIGHT_PNL        * summary["pnl_score_component"]
     )
     summary["ranking_methodology"] = "corporate_protection_downside_volatility_cost_v1"
     ranked = summary.sort_values(

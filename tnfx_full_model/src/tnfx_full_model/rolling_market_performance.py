@@ -85,13 +85,26 @@ def _prepare_base_forward(forward_backtest_long: pd.DataFrame, spot_history_long
     return merged
 
 
-def _vectorized_h_star(sigma_E: pd.Series, rho: float, sigma_Q: float, carry_cost: pd.Series, hedge_spot_rate: pd.Series, gamma_R: float) -> np.ndarray:
+def _vectorized_h_star(
+    sigma_E: pd.Series,
+    rho: float,
+    sigma_Q: float,
+    carry_cost: pd.Series,
+    hedge_spot_rate: pd.Series,
+    gamma_R: float,
+    representative_E: pd.Series,
+) -> np.ndarray:
     sigma = pd.to_numeric(sigma_E, errors="coerce").to_numpy(dtype=float)
     carry = pd.to_numeric(carry_cost, errors="coerce").to_numpy(dtype=float)
     spot = pd.to_numeric(hedge_spot_rate, errors="coerce").to_numpy(dtype=float)
+    e_abs = pd.to_numeric(representative_E, errors="coerce").abs().to_numpy(dtype=float)
     with np.errstate(divide="ignore", invalid="ignore"):
-        denom = 2.0 * np.square(sigma) * spot
-        gamma_term = np.where(denom == 0.0, 0.0, gamma_R * carry / denom)
+        denom = 2.0 * np.square(sigma) * e_abs * spot
+        gamma_term = np.where(
+            (denom == 0.0) | (~np.isfinite(denom)),
+            0.0,
+            gamma_R * carry / denom,
+        )
         return 1.0 + (rho * sigma_Q) / sigma - gamma_term
 
 
@@ -115,7 +128,15 @@ def _build_rows_for_scenario(
 
     active = hedge_scenario in {"low_protection", "baseline_protection", "high_protection"}
     if active and gamma_R is not None and np.isfinite(gamma_R):
-        h_star = _vectorized_h_star(df["sigma_E"], pop_median_rho, pop_median_sigma_Q, df["carry_cost_used"], df["hedge_spot_rate"], float(gamma_R))
+        h_star = _vectorized_h_star(
+            df["sigma_E"],
+            pop_median_rho,
+            pop_median_sigma_Q,
+            df["carry_cost_used"],
+            df["hedge_spot_rate"],
+            float(gamma_R),
+            df["representative_E"],
+        )
         h_c = np.clip(h_star, 0.0, 1.0)
         gamma_used = np.full(len(df), float(gamma_R), dtype=float)
         gamma_source_values = np.full(len(df), gamma_source, dtype=object)
@@ -196,6 +217,7 @@ def compute_rolling_market_performance(
     forward_backtest_long: pd.DataFrame,
     spot_history_long: pd.DataFrame,
     accepted_profiles: pd.DataFrame,
+    stage_1_5_handoff: pd.DataFrame,
     hedge_scenarios: dict,
     gamma_R_global: dict,
     stress_scenarios: dict,
@@ -205,19 +227,80 @@ def compute_rolling_market_performance(
     base = _prepare_base_forward(forward_backtest_long, spot_history_long, vol_window_days)
     pop_median_rho = float(accepted_profiles["rho"].median()) if not accepted_profiles.empty else 0.0
     pop_median_sigma_Q = float(accepted_profiles["sigma_Q"].median()) if not accepted_profiles.empty else 0.0
+    handoff_e = stage_1_5_handoff.copy()
+    handoff_e["abs_E_t"] = pd.to_numeric(handoff_e["E_t"], errors="coerce").abs()
+    median_E_lookup = handoff_e.groupby(
+        ["currency_pair", "tenor_months", "direction"], as_index=False
+    )["abs_E_t"].median().rename(columns={"abs_E_t": "representative_E"})
+    base = base.merge(
+        median_E_lookup,
+        on=["currency_pair", "tenor_months", "direction"],
+        how="left",
+    )
+    fallback_E = float(handoff_e["abs_E_t"].median()) if len(handoff_e) else 0.05
+    base["representative_E"] = base["representative_E"].fillna(fallback_E)
     base = base.assign(rho_median=pop_median_rho, sigma_Q_median=pop_median_sigma_Q)
+    base["carry_cost_base"] = pd.to_numeric(base["forward_rate"], errors="coerce") - pd.to_numeric(base["hedge_spot_rate"], errors="coerce")
+    calibration_cells = base[["currency_pair", "side", "tenor_months"]].drop_duplicates().to_dict("records")
+    global_gamma_per_cell = {}
+    for cell in calibration_cells:
+        cp = cell["currency_pair"]
+        sd = cell["side"]
+        tn = int(cell["tenor_months"])
+        cell_rows = base[
+            (base["currency_pair"] == cp)
+            & (base["side"] == sd)
+            & (base["tenor_months"] == tn)
+        ]
+        cell_rep_E = float(cell_rows["representative_E"].median()) if not cell_rows.empty else fallback_E
+        for scenario, target in hedge_scenarios.items():
+            if scenario in {"no_hedge", "full_hedge"}:
+                continue
+            gamma, status, _ = _calibrate_split_gamma(cell_rows, float(target), cell_rep_E)
+            global_gamma_per_cell[(cp, sd, tn, scenario)] = (gamma, status)
 
-    frames: list[pd.DataFrame] = []
+    performance_frames: list[pd.DataFrame] = []
     for scenario, target_intensity in hedge_scenarios.items():
-        gamma_R = float(gamma_R_global.get(scenario, np.nan)) if scenario in gamma_R_global else np.nan
-        gamma_source = "global_calibration" if scenario not in {"no_hedge", "full_hedge"} else ("rule_based_no_hedge" if scenario == "no_hedge" else "rule_based_full_hedge")
+        if scenario in {"no_hedge", "full_hedge"}:
+            gamma_R_default = np.nan
+            gamma_source_default = "rule_based_no_hedge" if scenario == "no_hedge" else "rule_based_full_hedge"
+            for stress_scenario, stress_bps in stress_scenarios.items():
+                frame = _build_rows_for_scenario(
+                    base, scenario, target_intensity, stress_scenario, stress_bps,
+                    gamma_R_default, gamma_source_default, pop_median_rho, pop_median_sigma_Q,
+                )
+                if run_id is not None:
+                    frame["run_id"] = run_id
+                performance_frames.append(frame)
+            continue
         for stress_scenario, stress_bps in stress_scenarios.items():
-            frame = _build_rows_for_scenario(base, scenario, target_intensity, stress_scenario, stress_bps, gamma_R, gamma_source, pop_median_rho, pop_median_sigma_Q)
-            if run_id is not None:
-                frame["run_id"] = run_id
-            frames.append(frame)
+            frames_per_cell = []
+            for cell in calibration_cells:
+                cp = cell["currency_pair"]
+                sd = cell["side"]
+                tn = int(cell["tenor_months"])
+                gamma_R, status = global_gamma_per_cell.get((cp, sd, tn, scenario), (np.nan, "calibration_failed"))
+                gamma_source = "global_per_cell_calibration" if np.isfinite(gamma_R) and status == "ok" else "calibration_failed"
+                cell_base = base[
+                    (base["currency_pair"] == cp)
+                    & (base["side"] == sd)
+                    & (base["tenor_months"] == tn)
+                ].copy()
+                if cell_base.empty:
+                    continue
+                frame = _build_rows_for_scenario(
+                    cell_base, scenario, target_intensity, stress_scenario, stress_bps,
+                    gamma_R, gamma_source, pop_median_rho, pop_median_sigma_Q,
+                )
+                if not np.isfinite(gamma_R) or status != "ok":
+                    frame["h_c"] = np.nan
+                if run_id is not None:
+                    frame["run_id"] = run_id
+                frames_per_cell.append(frame)
+            if frames_per_cell:
+                performance_frames.append(pd.concat(frames_per_cell, ignore_index=True))
 
-    result = pd.concat(frames, ignore_index=True)
+    result = pd.concat(performance_frames, ignore_index=True)
     cols = [
         "run_id", "currency_pair", "side", "direction", "tenor_months",
         "transaction_date", "hedge_transaction_date", "hedge_n_days", "regime_label",
@@ -231,28 +314,23 @@ def compute_rolling_market_performance(
     return result[cols].reset_index(drop=True)
 
 
-def _calibrate_split_gamma(benchmark: pd.DataFrame, target_intensity: float) -> tuple[float, str, int]:
-    """
-    Calibrate gamma_R for the rolling h_star formula:
-        h_star = 1 + rho*sigma_Q/sigma - gamma * carry / (2 * sigma^2 * spot)
-    
-    Solving h_star = target for gamma:
-        gamma = (1 + rho*sigma_Q/sigma - target) * 2 * sigma^2 * spot / carry
-    
-    This formula has no E term because _vectorized_h_star does not use E.
-    """
+def _calibrate_split_gamma(
+    benchmark: pd.DataFrame,
+    target_intensity: float,
+    representative_E_median: float,
+) -> tuple[float, str, int]:
     if benchmark.empty:
         return np.nan, "calibration_failed", 0
     med_sigma = float(pd.to_numeric(benchmark["sigma_E"], errors="coerce").median())
-    med_s0    = float(pd.to_numeric(benchmark["hedge_spot_rate"], errors="coerce").median())
+    med_s0 = float(pd.to_numeric(benchmark["hedge_spot_rate"], errors="coerce").median())
     med_carry = float(pd.to_numeric(benchmark["carry_cost_base"], errors="coerce").median())
-    rho       = float(pd.to_numeric(benchmark["rho_median"], errors="coerce").median())
-    sigma_q   = float(pd.to_numeric(benchmark["sigma_Q_median"], errors="coerce").median())
-    if med_sigma <= 0 or med_s0 <= 0 or med_carry <= 0:
+    rho = float(pd.to_numeric(benchmark["rho_median"], errors="coerce").median())
+    sigma_q = float(pd.to_numeric(benchmark["sigma_Q_median"], errors="coerce").median())
+    e_abs = float(representative_E_median)
+    if med_sigma <= 0 or med_s0 <= 0 or med_carry <= 0 or e_abs <= 0:
         return np.nan, "calibration_failed_bad_inputs", int(len(benchmark))
     try:
-        # Direct closed-form inversion of _vectorized_h_star at target
-        numerator = (1.0 + rho * sigma_q / med_sigma - target_intensity) * 2.0 * med_sigma**2 * med_s0
+        numerator = (1.0 + rho * sigma_q / med_sigma - target_intensity) * 2.0 * med_sigma**2 * e_abs * med_s0
         if abs(med_carry) < 1e-12:
             return np.nan, "calibration_failed_zero_carry", int(len(benchmark))
         gamma = numerator / med_carry
@@ -267,6 +345,7 @@ def compute_oos_market_performance(
     forward_backtest_long: pd.DataFrame,
     spot_history_long: pd.DataFrame,
     accepted_profiles: pd.DataFrame,
+    stage_1_5_handoff: pd.DataFrame,
     hedge_scenarios: dict,
     stress_scenarios: dict,
     vol_window_days: int = 252,
@@ -277,13 +356,22 @@ def compute_oos_market_performance(
     base = _prepare_base_forward(forward_backtest_long, spot_history_long, vol_window_days)
     pop_median_rho = float(accepted_profiles["rho"].median()) if not accepted_profiles.empty else 0.0
     pop_median_sigma_Q = float(accepted_profiles["sigma_Q"].median()) if not accepted_profiles.empty else 0.0
+    handoff_e = stage_1_5_handoff.copy()
+    handoff_e["abs_E_t"] = pd.to_numeric(handoff_e["E_t"], errors="coerce").abs()
+    median_E_lookup = handoff_e.groupby(
+        ["currency_pair", "tenor_months", "direction"], as_index=False
+    )["abs_E_t"].median().rename(columns={"abs_E_t": "representative_E"})
+    base = base.merge(
+        median_E_lookup,
+        on=["currency_pair", "tenor_months", "direction"],
+        how="left",
+    )
+    fallback_E = float(handoff_e["abs_E_t"].median()) if len(handoff_e) else 0.05
+    base["representative_E"] = base["representative_E"].fillna(fallback_E)
     base = base.assign(rho_median=pop_median_rho, sigma_Q_median=pop_median_sigma_Q)
     train_start = pd.to_datetime(walk_forward_initial_train_start)
-    benchmark = base[(base["currency_pair"] == "EUR_TND") & (base["tenor_months"] == 6)].copy()
-    # carry_cost_base = forward premium under CIP (no wedge stress).
-    # This is the calibration benchmark for all gamma_R values.
-    # The CIP+50bps stress scenario applies after calibration, not during it.
-    benchmark["carry_cost_base"] = pd.to_numeric(benchmark["forward_rate"], errors="coerce") - pd.to_numeric(benchmark["hedge_spot_rate"], errors="coerce")
+    base["carry_cost_base"] = pd.to_numeric(base["forward_rate"], errors="coerce") - pd.to_numeric(base["hedge_spot_rate"], errors="coerce")
+    calibration_cells = base[["currency_pair", "side", "tenor_months"]].drop_duplicates().to_dict("records")
 
     calibration_rows = []
     performance_frames = []
@@ -293,43 +381,64 @@ def compute_oos_market_performance(
         test_start = pd.Timestamp(f"{test_year}-01-01")
         test_end = pd.Timestamp(f"{test_year}-12-31")
         current_train_end = pd.Timestamp(f"{test_year - 1}-12-31")
-        train_rows = benchmark[(benchmark["hedge_transaction_date"] >= train_start) & (benchmark["hedge_transaction_date"] <= current_train_end)].copy()
-        for scenario in active_scenarios:
-            target = float(hedge_scenarios[scenario])
-            gamma, status, n_train = _calibrate_split_gamma(train_rows, target)
-            calibration_rows.append({
-                "split_id": split_id,
-                "train_start": train_start,
-                "train_end": current_train_end,
-                "test_start": test_start,
-                "test_end": test_end,
-                "hedge_intensity_scenario": scenario,
-                "target_intensity": target,
-                "gamma_R": gamma,
-                "calibration_status": status,
-                "gamma_methodology": "split_specific_market_side",
-                "benchmark_exposure_definition": "fixed_unit_exposure",
-                "n_training_observations": n_train,
-                "calibration_currency_pair": "EUR_TND",
-                "calibration_tenor_months": 6,
-            })
+        for cell in calibration_cells:
+            cp = cell["currency_pair"]
+            sd = cell["side"]
+            tn = int(cell["tenor_months"])
+            cell_train = base[
+                (base["currency_pair"] == cp)
+                & (base["side"] == sd)
+                & (base["tenor_months"] == tn)
+                & (base["hedge_transaction_date"] >= train_start)
+                & (base["hedge_transaction_date"] <= current_train_end)
+            ].copy()
+            cell_rep_E = float(cell_train["representative_E"].median()) if not cell_train.empty else fallback_E
+            for scenario in active_scenarios:
+                target = float(hedge_scenarios[scenario])
+                gamma, status, n_train = _calibrate_split_gamma(cell_train, target, cell_rep_E)
+                calibration_rows.append({
+                    "split_id": split_id,
+                    "train_start": train_start,
+                    "train_end": current_train_end,
+                    "test_start": test_start,
+                    "test_end": test_end,
+                    "hedge_intensity_scenario": scenario,
+                    "target_intensity": target,
+                    "gamma_R": gamma,
+                    "calibration_status": status,
+                    "gamma_methodology": "split_specific_per_cell_market_side",
+                    "benchmark_exposure_definition": "per_cell_median_abs_E",
+                    "n_training_observations": n_train,
+                    "calibration_currency_pair": cp,
+                    "calibration_side": sd,
+                    "calibration_tenor_months": tn,
+                })
 
         split_base = base[(base["hedge_transaction_date"] >= test_start) & (base["hedge_transaction_date"] <= test_end)].copy()
         if split_base.empty:
             continue
 
-        gamma_map = {row["hedge_intensity_scenario"]: row["gamma_R"] for row in calibration_rows if row["split_id"] == split_id}
-        gamma_status = {row["hedge_intensity_scenario"]: row["calibration_status"] for row in calibration_rows if row["split_id"] == split_id}
+        gamma_lookup_cell = {}
+        gamma_status_cell = {}
+        for row in calibration_rows:
+            if row["split_id"] != split_id:
+                continue
+            key = (row["calibration_currency_pair"], row["calibration_side"], row["calibration_tenor_months"], row["hedge_intensity_scenario"])
+            gamma_lookup_cell[key] = row["gamma_R"]
+            gamma_status_cell[key] = row["calibration_status"]
 
         for scenario, target_intensity in hedge_scenarios.items():
             if scenario in {"no_hedge", "full_hedge"}:
-                gamma_R = np.nan
-                gamma_source = "rule_based_no_hedge" if scenario == "no_hedge" else "rule_based_full_hedge"
+                gamma_R_default = np.nan
+                gamma_source_default = "rule_based_no_hedge" if scenario == "no_hedge" else "rule_based_full_hedge"
                 for stress_scenario, stress_bps in stress_scenarios.items():
-                    frame = _build_rows_for_scenario(split_base, scenario, target_intensity, stress_scenario, stress_bps, gamma_R, gamma_source, pop_median_rho, pop_median_sigma_Q)
+                    frame = _build_rows_for_scenario(
+                        split_base, scenario, target_intensity, stress_scenario, stress_bps,
+                        gamma_R_default, gamma_source_default, pop_median_rho, pop_median_sigma_Q,
+                    )
                     frame["split_specific_gamma_used"] = True
                     frame["methodological_status"] = "true_out_of_sample"
-                    frame["gamma_methodology"] = "split_specific_oos"
+                    frame["gamma_methodology"] = "split_specific_per_cell_oos"
                     frame["split_id"] = split_id
                     frame["train_start"] = train_start
                     frame["train_end"] = current_train_end
@@ -337,23 +446,40 @@ def compute_oos_market_performance(
                     frame["test_end"] = test_end
                     performance_frames.append(frame)
                 continue
-
-            gamma_R = gamma_map.get(scenario, np.nan)
-            status = gamma_status.get(scenario, "calibration_failed")
-            gamma_source = "split_training_calibration" if np.isfinite(gamma_R) and status == "ok" else "split_calibration_failed_no_oos"
             for stress_scenario, stress_bps in stress_scenarios.items():
-                frame = _build_rows_for_scenario(split_base, scenario, target_intensity, stress_scenario, stress_bps, gamma_R, gamma_source, pop_median_rho, pop_median_sigma_Q)
-                frame["split_specific_gamma_used"] = True
-                frame["methodological_status"] = "true_out_of_sample" if np.isfinite(gamma_R) and status == "ok" else "calibration_failed"
-                frame["gamma_methodology"] = "split_specific_oos"
-                if not np.isfinite(gamma_R) or status != "ok":
-                    frame["h_c"] = np.nan
-                frame["split_id"] = split_id
-                frame["train_start"] = train_start
-                frame["train_end"] = current_train_end
-                frame["test_start"] = test_start
-                frame["test_end"] = test_end
-                performance_frames.append(frame)
+                frames_per_cell = []
+                for cell in calibration_cells:
+                    cp = cell["currency_pair"]
+                    sd = cell["side"]
+                    tn = int(cell["tenor_months"])
+                    key = (cp, sd, tn, scenario)
+                    gamma_R_cell = gamma_lookup_cell.get(key, np.nan)
+                    status_cell = gamma_status_cell.get(key, "calibration_failed")
+                    gamma_source_cell = "split_training_calibration" if np.isfinite(gamma_R_cell) and status_cell == "ok" else "split_calibration_failed_no_oos"
+                    cell_base = split_base[
+                        (split_base["currency_pair"] == cp)
+                        & (split_base["side"] == sd)
+                        & (split_base["tenor_months"] == tn)
+                    ].copy()
+                    if cell_base.empty:
+                        continue
+                    frame = _build_rows_for_scenario(
+                        cell_base, scenario, target_intensity, stress_scenario, stress_bps,
+                        gamma_R_cell, gamma_source_cell, pop_median_rho, pop_median_sigma_Q,
+                    )
+                    frame["split_specific_gamma_used"] = True
+                    frame["methodological_status"] = "true_out_of_sample" if np.isfinite(gamma_R_cell) and status_cell == "ok" else "calibration_failed"
+                    frame["gamma_methodology"] = "split_specific_per_cell_oos"
+                    if not np.isfinite(gamma_R_cell) or status_cell != "ok":
+                        frame["h_c"] = np.nan
+                    frame["split_id"] = split_id
+                    frame["train_start"] = train_start
+                    frame["train_end"] = current_train_end
+                    frame["test_start"] = test_start
+                    frame["test_end"] = test_end
+                    frames_per_cell.append(frame)
+                if frames_per_cell:
+                    performance_frames.append(pd.concat(frames_per_cell, ignore_index=True))
 
     performance = pd.concat(performance_frames, ignore_index=True) if performance_frames else pd.DataFrame()
     calibration = pd.DataFrame(calibration_rows)

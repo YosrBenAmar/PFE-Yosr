@@ -32,11 +32,22 @@ def _accepted():
     return pd.DataFrame({"family": ["importer", "exporter"], "rho": [0.1, 0.15], "sigma_Q": [0.2, 0.25]})
 
 
+def _handoff():
+    return pd.DataFrame({
+        "profile_id": [1, 2, 3],
+        "currency_pair": ["EUR_TND"] * 3,
+        "tenor_months": [6, 6, 6],
+        "direction": ["outflow"] * 3,
+        "E_t": [-0.10, -0.15, -0.12],
+    })
+
+
 def test_oos_uses_split_specific_gamma():
     oos, _ = compute_oos_market_performance(
         forward_backtest_long=_synthetic_forward(),
         spot_history_long=_synthetic_history(),
         accepted_profiles=_accepted(),
+        stage_1_5_handoff=_handoff(),
         hedge_scenarios={"no_hedge": 0.0, "low_protection": 0.25, "baseline_protection": 0.5, "high_protection": 0.75, "full_hedge": 1.0},
         stress_scenarios={"cip_base": 0, "cip_plus_50bps": 50},
         vol_window_days=30,
@@ -53,6 +64,7 @@ def test_first_split_is_2008_2013_to_2014():
         forward_backtest_long=_synthetic_forward(),
         spot_history_long=_synthetic_history(),
         accepted_profiles=_accepted(),
+        stage_1_5_handoff=_handoff(),
         hedge_scenarios={"no_hedge": 0.0, "low_protection": 0.25, "baseline_protection": 0.5, "high_protection": 0.75, "full_hedge": 1.0},
         stress_scenarios={"cip_base": 0, "cip_plus_50bps": 50},
         vol_window_days=30,
@@ -69,6 +81,7 @@ def test_oos_gamma_table_has_methodology_disclosure():
         forward_backtest_long=_synthetic_forward(),
         spot_history_long=_synthetic_history(),
         accepted_profiles=_accepted(),
+        stage_1_5_handoff=_handoff(),
         hedge_scenarios={"no_hedge": 0.0, "low_protection": 0.25, "baseline_protection": 0.5, "high_protection": 0.75, "full_hedge": 1.0},
         stress_scenarios={"cip_base": 0, "cip_plus_50bps": 50},
         vol_window_days=30,
@@ -90,6 +103,7 @@ def test_oos_gamma_table_labels_market_side_fixed_unit_exposure():
         forward_backtest_long=_synthetic_forward(),
         spot_history_long=_synthetic_history(),
         accepted_profiles=_accepted(),
+        stage_1_5_handoff=_handoff(),
         hedge_scenarios={"no_hedge": 0.0, "low_protection": 0.25, "baseline_protection": 0.5, "high_protection": 0.75, "full_hedge": 1.0},
         stress_scenarios={"cip_base": 0, "cip_plus_50bps": 50},
         vol_window_days=30,
